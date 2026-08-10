@@ -40,28 +40,36 @@ echarlo de menos. Todo lo de aquí se ordena por eso, no por lo interesante que 
       `historial-privado`
 - [x] **Repo público** desde el 2026-08-10 — github.com/padremprendedor-create/WISPI
 
-### v0.3 — palabra de activación "hey WISPI" (2026-08-10)
+### v0.3 — palabra de activación "wispi" (2026-08-10)
 - [x] `wispi/wake.py`: segmentador por energía + reconocedor `tiny` aparte, sin
       dependencias nuevas y sin descargas nuevas. **La decisión de diseño**: no se
       corre Whisper sobre una ventana deslizante (coste fijo del encoder = ventiladores
       para siempre), se segmenta primero y solo llega al ASR un enunciado corto y
       aislado. Con la sala callada, cero llamadas
-- [x] Emparejado difuso con dos umbrales. El segundo, el del nombre solo, es el que
-      tumba "hey wifi" (0,80 contra la frase entera, 0,67 contra el nombre)
+- [x] Emparejado difuso con dos umbrales, más `wake._EXCLUDE` para lo que ningún umbral
+      separa (ver H6). Empezó siendo "hey wispi"; el segundo umbral tumbaba "hey wifi"
+      (0,80 contra la frase, 0,67 contra el nombre)
 - [x] Desarmado fuera de IDLE (no se oye a sí mismo), arranque sin pre-roll (la frase
       de activación no se escribe), refractario de 2 s
 - [x] Pestaña *Palabra clave* en configuración, `selftest --wake` para calibrar en vivo
-- [x] `tools/test_wake.py`: 18 variantes + 18 trampas + 6 escenarios de segmentación.
-      **36/36 y 6/6 sin voz humana**
+- [x] `tools/test_wake.py`: variantes + 32 trampas + 6 escenarios de segmentación,
+      todo sin voz humana
 - [x] Encendida en `config.yaml` para poder probarla; el default del código sigue en
       `false` y el fichero explica por qué y cómo apagarla. Es la única función que
       analiza el micro sin que se lo pidan, así que no puede quedar escondida
-- [x] **C11.2 verificado con voz real** — 2026-08-10, `selftest --wake`: 2 activaciones
-      sobre 3 enunciados con la voz de Junior. Dos variantes nuevas que ni estaban en el
-      corpus sintético — *"Hey, Whisby."* (0,824) y *"¡Hey, Whispy!y."* (0,941) — se
-      añadieron a `tools/test_wake.py` con su score real, tal cual salieron
-- [ ] 🔴 **Queda C11.3: que la frase de activación no acabe escrita.** `selftest --wake`
-      solo detecta, no dicta; falta correr la app completa, decir "hey WISPI" y comprobar
+- [x] **C11.2 verificado con voz real** — 2026-08-10, `selftest --wake`, con la frase
+      larga "hey wispi": 2 activaciones sobre 3 enunciados con la voz de Junior. Dos
+      variantes nuevas que ni estaban en el corpus sintético — *"Hey, Whisby."* (0,824)
+      y *"¡Hey, Whispy!y."* (0,941) — se añadieron con su score real, tal cual salieron
+- [x] **Frase acortada a solo "wispi"** — mismo día: con la larga, un intento real
+      disparó 1 de 3 (cada "hey" pronunciado distinto desplaza el parecido de toda la
+      cadena). Sin la muletilla, "wispi" cae en un vecindario de palabras reales que
+      ningún umbral separa de una variante válida — "whisky" puntúa igual que "Guispi",
+      "wisin" igual que "Wisbi" — así que se bloquean por nombre exacto, no por umbral
+      (H6 del SPEC, mismo patrón que `postprocess/hallucinations.py`)
+- [ ] 🔴 **Queda C11.3: que la frase de activación no acabe escrita**, y repetir C11.2
+      ya con el nombre solo (lo verificado fue con la frase larga). `selftest --wake`
+      solo detecta, no dicta; falta correr la app completa, decir "wispi" y comprobar
       el texto insertado
 
 ### Recarga en caliente: la promesa era falsa (2026-08-10)
@@ -101,8 +109,10 @@ exactamente lo que aquí falta.
 - [ ] **C10.1** — reiniciar Windows y comprobar el autoarranque
       (`scripts/install_autostart.ps1`)
 - [ ] **C6.1** — 5 s de silencio con la tecla mantenida → cero caracteres
-- [ ] **C11.3** — que la frase "hey WISPI" **no** acabe escrita tras el despertar.
-      C11.2 (que despierte) ya está ✅ verificado con voz real el 2026-08-10
+- [ ] **C11.3** — que la frase "wispi" **no** acabe escrita tras el despertar.
+      C11.2 (que despierte) ✅ verificado con voz real el 2026-08-10, pero con la frase
+      larga "hey wispi" que ya no es la que se anuncia — falta repetirlo con el nombre
+      solo
 
 ---
 

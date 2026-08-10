@@ -42,7 +42,7 @@ hotkey:
   accept_injected: false    # [SOLO TESTS] aceptar input sintetico (LLKHF_INJECTED)
 
 wake:
-  # "hey WISPI" arranca un dictado en manos libres sin tocar nada. NO sustituye a
+  # Decir "wispi" arranca un dictado en manos libres sin tocar nada. NO sustituye a
   # Ctrl+Win: es para cuando no tienes las manos en el teclado.
   #
   # LEE ESTO ANTES DE DEJARLO EN true. Es la unica funcion de WISPI que analiza el
@@ -63,20 +63,29 @@ wake:
 
   # Formas, no ortografias. El emparejado es DIFUSO porque "wispi" no es una
   # palabra espanola y el modelo la escribe distinto cada vez (Wispy, Guispi,
-  # Vispi...). Ver `tools/test_wake.py` para las 18 variantes que se aceptan.
+  # Vispi, Wisbi...). Ver `tools/test_wake.py` para las variantes que se aceptan.
+  #
+  # SOLO EL NOMBRE, sin "hey"/"oye" delante. Cambiado el 2026-08-10: con la frase
+  # completa ("hey wispi") solo disparo una vez de varios intentos -cada "hey"
+  # dicho un poco distinto desplaza el parecido de la FRASE, que se juzga como
+  # una sola cadena- y con el nombre solo hay menos silabas que puedan salir mal.
+  # El riesgo de decir un nombre corto y sin "hey" es mas falsos positivos por
+  # palabras parecidas ("wifi", "listo", "gris"); por eso bajaron los umbrales
+  # pero SIN cruzar 0.667, que es lo que da "wifi" contra "wispi" (ver H4 del
+  # SPEC). Si algun dia se despierta solo, sube `threshold`/`name_threshold` un
+  # poco, nunca los dos a la vez sin volver a correr tools/test_wake.py.
   phrases:
-    - hey wispi
-    - ey wispi
-    - oye wispi
-    - hola wispi
+    - wispi
   name: wispi
-  # Parecido minimo de la frase entera (0-1). Bajalo si no te reconoce.
-  threshold: 0.75
-  # ...y del NOMBRE solo. Este es el que hace el trabajo fino: sin el, "hey wifi"
-  # pasa con 0,80 porque comparte "hey" y "wi". Subirlo cierra falsos positivos;
-  # bajarlo de 0.65 empieza a abrirlos.
+  # Parecido minimo de la frase entera (0-1). Con una sola palabra, frase y
+  # nombre son casi la misma comparacion; se bajaron ambos umbrales a la vez
+  # a proposito. Bajalo si no te reconoce, subelo si se activa solo.
+  threshold: 0.70
+  # ...y del nombre solo, sobre el mejor sufijo del candidato. Con phrases de una
+  # sola palabra hace menos trabajo que antes (frase y nombre casi coinciden),
+  # pero sigue siendo la ultima defensa contra coincidencias raras del segmentador.
   name_threshold: 0.70
-  max_tokens: 5             # un enunciado mas largo no es una palabra de activacion
+  max_tokens: 3             # una sola palabra: un enunciado de mas de 3 tokens no es esto
 
   model: tiny               # [REINICIO]
   # NO los 10 del ASR: esto corre mientras no dictas y no puede pelearse con

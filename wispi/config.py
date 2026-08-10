@@ -123,15 +123,22 @@ class WakeCfg:
     """
 
     enabled: bool = False
-    # Varias frases porque `tiny` no oye "hey" de una sola manera. El emparejado
-    # es difuso, asi que esta lista es de FORMAS, no de ortografias exactas.
-    phrases: list[str] = field(default_factory=lambda: [
-        "hey wispi", "ey wispi", "oye wispi", "hola wispi",
-    ])
+    # Solo el nombre, sin "hey"/"oye" delante. Empezo siendo una lista de frases
+    # con muletilla ("hey wispi", "oye wispi"...) y se cambio el 2026-08-10: con
+    # la frase completa solo disparo una vez de varios intentos reales, porque
+    # cada "hey" dicho un poco distinto desplaza el parecido de TODA la cadena.
+    # Menos silabas que puedan salir mal. El emparejado sigue siendo difuso -
+    # "wispi" no es una palabra espanola y el modelo la escribe distinto cada vez
+    # (Wispy, Guispi, Vispi, Wisbi)-, asi que esto es una FORMA, no una ortografia.
+    phrases: list[str] = field(default_factory=lambda: ["wispi"])
     name: str = "wispi"       # se comprueba aparte y con mas dureza que la frase
-    threshold: float = 0.75   # parecido minimo de la frase entera
-    name_threshold: float = 0.70  # ...y del nombre solo. Es el que tumba "hey wifi"
-    max_tokens: int = 5       # un enunciado mas largo no es una palabra de activacion
+    # Con una sola palabra, frase y nombre son casi la misma comparacion, y los
+    # dos umbrales bajaron JUNTOS de 0.75/0.70 a 0.70/0.70. El limite duro es
+    # 0.667: eso es lo que da "wifi" contra "wispi" (H4 del SPEC), y no se puede
+    # cruzar sin que "hey wifi" -o ahora, sin el "hey", el propio "wifi"- dispare.
+    threshold: float = 0.70   # parecido minimo de la frase entera
+    name_threshold: float = 0.70  # ...y del nombre solo, sobre el mejor sufijo
+    max_tokens: int = 3       # una sola palabra: mas de 3 tokens no es esto
 
     # Modelo del detector, independiente del de dictado. `tiny` = 0,21 s MEDIDOS.
     model: str = "tiny"

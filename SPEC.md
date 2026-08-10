@@ -150,7 +150,7 @@ Contra estos se verifica, **nunca contra el `status` que un agente se ponga a s�
   conserva y avisa. Ver H5.
 - **C10.4** Desconectar el micro USB en caliente produce error visible, no crash.
 
-### C11 — Palabra de activación ("hey WISPI")
+### C11 — Palabra de activación ("wispi")
 
 Añadido en v0.3. Objetivo real: **dictar sin tocar nada** cuando las manos no están en el
 teclado. No sustituye a `Ctrl+Win`, que sigue siendo el camino rápido y el que nunca falla.
@@ -160,16 +160,17 @@ teclado. No sustituye a `Ctrl+Win`, que sigue siendo el camino rápido y el que 
   que `wispi.log` no registra ninguna línea de `wake`. El default del **código** es
   `false`; `config.yaml` lo enciende a propósito y lo dice en un comentario, porque un
   micrófono siempre puesto no puede quedar escondido en un valor por defecto.
-- **C11.2** Decir "hey WISPI" con WISPI en reposo arranca un dictado en **manos libres**
-  (corta solo por silencio), sin tocar teclado ni ratón.
+- **C11.2** Decir "wispi" (con o sin "hey"/"oye" delante) con WISPI en reposo arranca un
+  dictado en **manos libres** (corta solo por silencio), sin tocar teclado ni ratón.
   ✅ VERIFICADO — 2026-08-10, `uv run python -m wispi.selftest --wake`, voz real de
-  Junior: **2 activaciones sobre 3 enunciados analizados** (`tiny`, `cpu_threads=2`,
-  314 ms de inferencia). Transcripciones reales: *"Hey, Whisby."* (score 0,824) y
-  *"¡Hey, Whispy!y."* (score 0,941) — ninguna estaba en el corpus sintético de
-  `tools/test_wake.py`; se añadieron después, con el score real, para que un ajuste
-  de umbrales futuro no las rompa en silencio.
+  Junior con la frase larga "hey wispi": **2 activaciones sobre 3 enunciados
+  analizados** (`tiny`, `cpu_threads=2`, 314 ms de inferencia). Transcripciones reales:
+  *"Hey, Whisby."* (score 0,824) y *"¡Hey, Whispy!y."* (score 0,941) — ninguna estaba en
+  el corpus sintético de `tools/test_wake.py`; se añadieron después, con el score real.
+  La frase por defecto cambió el mismo día a solo el nombre (ver H6): con la larga
+  disparó 1 de 3 intentos reales, y sigue pendiente repetir la medición con "wispi" sola.
 - **C11.3** **La frase de activación nunca se escribe.** Tras despertar, el texto insertado
-  no contiene "hey wispi" ni variantes. Es el criterio que decide el diseño: la grabación
+  no contiene "wispi" ni variantes. Es el criterio que decide el diseño: la grabación
   arranca **sin pre-roll** (`wake.include_preroll: false`). 🔴 **HUMANO** — falta probar
   el dictado completo tras el despertar (`selftest --wake` solo detecta, no dicta).
 - **C11.4** El detector **solo escucha en reposo**. Mientras se graba, transcribe, pule o
@@ -180,12 +181,14 @@ teclado. No sustituye a `Ctrl+Win`, que sigue siendo el camino rápido y el que 
   `max_speech_s`, cerrados por `end_silence_s` de silencio). Una conversación seguida o una
   llamada no producen candidatos. Verificable con `--wake` en `wispi.selftest`:
   `checks` se queda en 0 con la sala callada.
-- **C11.6** **Cero falsos positivos** sobre las trampas del corpus de texto:
-  "hey wifi", "hey", "whisky", "y esto", "es que sí", "wikipedia".
-  Verificable sin voz con `tools/test_wake.py`.
-- **C11.7** Las variantes que Whisper produce de verdad para la frase **sí** disparan:
-  "Hey, Wispi.", "Ey Wispy", "Hey, Guispi", "Ay, Wispi", "Oye Wispi", "hey wis pi".
-  Verificable sin voz con `tools/test_wake.py`.
+- **C11.6** **Cero falsos positivos** sobre las trampas del corpus de texto: "wifi",
+  "hey", "whisky", "wisin", "y esto", "es que sí", "wikipedia" — 32 casos, incluidas las
+  dos palabras reales que el umbral por sí solo no distingue de una variante válida
+  (ver H6; bloqueadas por `wake._EXCLUDE`, no por umbral). Verificable sin voz con
+  `tools/test_wake.py`.
+- **C11.7** Las variantes que Whisper produce de verdad para "wispi" **sí** disparan:
+  "Wispi", "Wispy", "Guispi", "Vispi", "Wisbi", "wis pi", y también con la muletilla
+  larga delante ("Hey, Wispi.", "Oye Wispi"). Verificable sin voz con `tools/test_wake.py`.
 - **C11.8** Si el modelo del detector no carga, se avisa con WARNING, la palabra de
   activación queda desactivada y **WISPI sigue dictando con `Ctrl+Win`**. Nunca tumba la app.
 - **C11.9** Privacidad: con `logging.include_text: false` (default) **nada de lo que oye el
@@ -205,7 +208,7 @@ teclado. No sustituye a `Ctrl+Win`, que sigue siendo el camino rápido y el que 
 | 4 | Bandeja, hot-reload, autoarranque | 🔴 **HUMANO** — exige reinicio |
 | 5 | Nivel 1 LLM + inserción optimista | 🟡 automatizable |
 | 6 | Medición sobre ≥ 100 dictados reales | 🔴 **HUMANO** — exige uso real |
-| 7 | Palabra de activación "hey WISPI" (C11) | 🟡 C11.2 verificado con voz real; falta C11.3 (que no se escriba la frase) |
+| 7 | Palabra de activación "wispi" (C11) | 🟡 C11.2 verificado con voz real (frase larga); falta repetir con el nombre solo y cerrar C11.3 |
 
 ## 5. Acciones que requieren permiso humano
 
@@ -320,6 +323,33 @@ Quedan dos cosas que la identidad estable no arregla y hay que sincronizar a man
 segmentador de `wake.py`) y lo que se **copia por valor** (`Feedback`, que además
 pregenera los tonos). Un módulo nuevo que haga cualquiera de las dos cosas se añade ahí
 y a `tools/test_config_reload.py`.
+
+### H6 — "wispi" sola cae en un vecindario de palabras reales que ningún umbral separa
+
+Con la frase completa ("hey wispi") verificada con voz real (C11.2), el uso diario dio
+**una activación de varios intentos**: cada "hey" pronunciado un poco distinto desplaza
+el parecido de toda la cadena, que `match()` juzga como una sola cosa. Se cambió la
+frase a solo el nombre — menos sílabas que puedan salir mal.
+
+El precio: sin el "hey" que servía de ancla, "wispi" sola compite con palabras
+españolas/prestadas reales. Medido con `difflib.SequenceMatcher`:
+
+| candidato | contra "wispi" | ¿debe disparar? | colisiona con |
+|---|---|---|---|
+| "whisky" | 0,727 | no | "Guispi" (0,727) — variante real |
+| "wisin" | 0,800 | no | "Wisbi" (0,800) — variante real |
+| "wifi" | 0,667 | no | — (el margen que ya daba H4) |
+
+**Ningún umbral separa "whisky" de "Guispi", ni "wisin" de "Wisbi": son idénticos por la
+métrica.** Subir el umbral lo bastante para excluir uno excluye también al otro. No es
+un umbral mal puesto; es que la similitud de caracteres no sabe que "wispi" no es una
+palabra española y "whisky" sí.
+
+La corrección no es numérica, es una lista: `wake._EXCLUDE`, palabras normalizadas
+conocidas que se bloquean por nombre exacto antes de puntuar, igual que
+`postprocess/hallucinations.py::HALLUCINATIONS` bloquea frases-basura conocidas en vez
+de perseguir un umbral que las excluya solo. Verificado en `tools/test_wake.py`
+(32 negativos, incluye "whisky", "un whisky doble" y "wisin").
 
 ## 7. Regla de verificación
 

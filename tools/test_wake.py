@@ -5,12 +5,21 @@
 Verifica los criterios C11.6 (cero falsos positivos) y C11.7 (las variantes que
 Whisper produce de verdad SI disparan) sobre texto, que es donde vive el riesgo:
 el segmentador solo decide QUE se manda al reconocedor; quien decide si eso era
-"hey WISPI" es `wake.match()`, y esa funcion es pura.
+"wispi" es `wake.match()`, y esa funcion es pura.
 
 Los positivos NO son inventados: son las formas en que `tiny` transcribe una
 palabra que no existe en espanol y que nunca vio en su corpus. Los negativos
-tampoco: "hey wifi" es el caso que fija `name_threshold` en 0,70 (da 0,80 contra
-la frase entera y solo se cae al mirar el nombre por separado).
+tampoco: "wifi" es el caso que de verdad limita los umbrales. Contra "wispi" da
+0,667 -comparte "wi" y termina en vocal-, y 0,70 (config.yaml, 2026-08-10) es el
+umbral mas bajo que lo deja fuera. Bajar de ahi abre la puerta a que "wifi" solo,
+sin ningun "hey" delante que lo distinga, dispare la palabra de activacion.
+
+La frase paso de ser una lista con muletilla ("hey wispi", "oye wispi"...) a ser
+solo el nombre: con la muletilla, un intento real disparo una vez de varios
+-cada "hey" pronunciado distinto desplaza el parecido de TODA la cadena- y con
+el nombre solo hay menos silabas que puedan salir mal. El precio es que el
+margen contra "wifi" se estrecha (antes 0,80 vs 0,667 con "hey" de por medio;
+ahora 1,0 vs 0,667 sin el, pero variantes reales como "Guispi" bajan a 0,727).
 
 Anadir un caso aqui cuesta una linea y es la forma barata de subir un umbral sin
 romper lo que ya funcionaba.
@@ -34,41 +43,47 @@ from wispi.wake import WakeWord, match, normalize    # noqa: E402
 
 CFG = WakeCfg()
 
-# Tiene que disparar. Cada linea es una transcripcion plausible de `tiny`.
+# Tiene que disparar. Cada linea es una transcripcion plausible de `tiny` para
+# la palabra sola. Muchas siguen valiendo con "hey"/"oye" delante -el emparejado
+# escanea subcadenas del enunciado, asi que decir la frase larga por costumbre
+# tambien dispara- pero lo que fija el umbral ahora es el nombre solo.
 POSITIVOS = [
-    "hey wispi",
-    "Hey, Wispi.",
-    "¡Hey, WISPI!",
-    "hey Wispy",
-    "Ey Wispi",
-    "ey wispy",
+    "wispi",
+    "Wispi",
+    "WISPI",
+    "Wispy",
+    "Whispy",
+    "Vispi",
+    "Wisbi",
+    "wis pi",              # el modelo parte la palabra
+    "heywispi",            # ...o la junta con "hey"
+    "Hey, Wispi.",         # con la muletilla de costumbre, sigue funcionando
     "Hey, Guispi.",
-    "hey guispy",
-    "Ay, Wispi.",
     "Oye Wispi",
-    "oye wispy",
     "Hola Wispi",
-    "hey wis pi",          # el modelo parte la palabra
-    "heywispi",            # ...o la junta
     "Hey, Whispi",
-    "hey vispi",
     "Hey, Wispi,",
-    "wispi",               # el nombre solo tambien vale, y esta asumido
     # -- capturadas EN VIVO con voz real, `uv run python -m wispi.selftest --wake`,
-    # 2026-08-10. No inventadas: son la salida literal de `tiny` sobre el "hey
-    # WISPI" que dijo Junior. Quedan aqui para que un ajuste de umbrales futuro
-    # no las rompa sin que nadie se entere.
-    "Hey, Whisby.",             # score real 0.824
-    "¡Hey, Whispy!y.",          # score real 0.941 (el "y." suelto es del propio ASR)
+    # 2026-08-10. No inventadas: son la salida literal de `tiny` sobre lo que dijo
+    # Junior. Quedan aqui para que un ajuste de umbrales futuro no las rompa sin
+    # que nadie se entere.
+    "Guispi",                   # score real 0.727 (variante de "Hey, Whisby.")
+    "Hey, Whisby.",             # score real 0.824 contra la frase larga que se usaba antes
+    "¡Hey, Whispy!y.",          # score real 0.941 contra la frase larga que se usaba antes
 ]
 
-# NO puede disparar. Son las trampas del criterio C11.6 mas las que salieron al
-# medir: palabras que comparten el arranque "wi-" o la muletilla "hey".
+# NO puede disparar. La mas importante es "wifi": es la que de verdad limita
+# cuanto se puede bajar el umbral (0,667 contra "wispi"), ahora que ya no hay un
+# "hey" delante que ayude a distinguirla. El resto son las trampas de C11.6.
 NEGATIVOS = [
-    "hey wifi",
+    "wifi",
+    "Wifi",
     "el wifi",
+    "hey wifi",
     "hey",
     "Hey!",
+    "oye",
+    "hola",
     "whisky",
     "un whisky doble",
     "y esto",
@@ -78,12 +93,22 @@ NEGATIVOS = [
     "wisin",
     "espera",
     "que pasa",
+    "listo",
+    "si",
+    "gris",
+    "quise",
+    "visto",
+    "guiso",
+    "guisa",
+    "pizza",
+    "mismo",
+    "wasap",
     "",
     "   ",
     ".",
-    # Largas: aunque contengan la frase, un enunciado de quince palabras no es
+    # Largas: aunque contengan la frase, un enunciado de mas de 3 tokens no es
     # una palabra de activacion. Lo corta `max_tokens` antes de puntuar.
-    "oye una cosa y luego le dices a hey wispi que escriba esto por favor",
+    "oye una cosa y luego le dices a wispi que escriba esto por favor",
     "pues nada que el otro dia le dije que si",
 ]
 

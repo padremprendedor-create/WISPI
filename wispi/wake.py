@@ -1,4 +1,9 @@
-"""Palabra de activacion: "hey WISPI" arranca un dictado sin tocar nada.
+"""Palabra de activacion: decir "wispi" arranca un dictado sin tocar nada.
+
+Sigue funcionando decir "hey wispi", "oye wispi", etc. -el emparejado escanea
+subcadenas del enunciado- pero desde el 2026-08-10 el nombre solo es la forma
+que se anuncia. Motivo en H6 de SPEC.md: menos silabas que puedan salir mal en
+el reconocimiento.
 
 ## POR QUE NO HAY UNA DEPENDENCIA NUEVA
 
@@ -51,9 +56,23 @@ palabra inventada: no pasa. Se compara por similitud, con DOS umbrales:
   1. la frase entera contra la frase configurada (`threshold`), y
   2. **el nombre solo** contra el mejor sufijo del candidato (`name_threshold`).
 
-El segundo es el que hace el trabajo fino. Sin el, "hey wifi" pasa: da 0,80
-contra "hey wispi" porque comparten "hey" y "wi". Con el, "wifi" contra "wispi"
-da 0,67 y se cae. Ese caso concreto es el que fija `name_threshold` en 0,70.
+Hasta el 2026-08-10 la frase por defecto llevaba una muletilla delante
+("hey wispi", "oye wispi"...) y el segundo umbral hacia el trabajo fino: sin
+el, "hey wifi" pasaba (0,80 contra "hey wispi", comparten "hey" y "wi"); con
+el, "wifi" solo contra "wispi" da 0,67 y se cae.
+
+Se cambio a **solo el nombre** porque con la muletilla un intento real disparo
+una vez de varios -cada "hey" pronunciado distinto desplaza el parecido de TODA
+la cadena, que se juzga como una sola cosa- y sin ella hay menos silabas que
+puedan salir mal. El precio: la "hey" que hacia de ancla desaparece, y "wispi"
+sola cae en un vecindario mas concurrido de palabras espanolas parecidas por
+pura coincidencia de caracteres. MEDIDO: "whisky" da 0,727 contra "wispi" -el
+MISMO numero que "Guispi", una variante real que si tiene que disparar- y
+"wisin" da 0,800 -igual que "Wisbi"-. Ningun umbral separa esos pares: son
+identicos por la metrica. De ahi `_EXCLUDE` mas abajo: una lista corta de
+palabras reales que se sabe que colisionan, comprobadas y bloqueadas por
+nombre exacto antes de puntuar, exactamente como `postprocess/hallucinations.py`
+bloquea frases conocidas en vez de intentar que un umbral haga ese trabajo.
 
 ## HILOS
 
@@ -121,6 +140,19 @@ def _ratio(a: str, b: str) -> float:
     return SequenceMatcher(None, a, b).ratio() if a and b else 0.0
 
 
+# Palabras espanolas/prestadas reales que un umbral no puede separar de "wispi"
+# porque su parecido de caracteres (SequenceMatcher) es IGUAL o mayor que el de
+# una variante valida. Normalizadas (la regla -y->-i ya aplicada). Bloqueadas
+# por nombre exacto, no por umbral -mismo patron que
+# `postprocess/hallucinations.py::HALLUCINATIONS`-, y verificadas en
+# `tools/test_wake.py`. Anadir una entrada aqui es gratis; subir un umbral para
+# lo mismo cuesta una variante real (ver el docstring del modulo).
+_EXCLUDE: frozenset[str] = frozenset({
+    "whiski",   # "whisky": 0.727 contra "wispi", igual que "Guispi"
+    "wisin",    # "Wisin" (musica reggaeton): 0.800, igual que "Wisbi"
+})
+
+
 def _name_score(window: str, name: str) -> float:
     """Mejor parecido del nombre contra CUALQUIER sufijo del candidato.
 
@@ -168,7 +200,11 @@ def match(text: str, phrases: list[str], name: str, *, threshold: float = 0.75,
         for size in {max(1, n - 1), n, n + 1}:
             for i in range(0, max(1, len(tokens) - size + 1)):
                 window = "".join(tokens[i:i + size])
-                if not window:
+                if not window or window in _EXCLUDE:
+                    # Bloqueado por nombre exacto: nunca cuenta, ni siquiera para
+                    # el "mejor score" que se reporta. Si contara, un log de
+                    # diagnostico mostraria un score alto para "whisky" y
+                    # parecería casi un acierto -no lo es, esta vetado a proposito.
                     continue
                 full = _ratio(window, target)
                 if full > best_score:

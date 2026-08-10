@@ -212,7 +212,7 @@ write down what it sees. That's why the default is unelevated.
 | Hold `Ctrl+Win` | Records while held (push-to-talk) |
 | Quick double-tap of `Ctrl+Win` | Hands-free: stops after 1.2 s of silence |
 | `Esc` while recording | Cancels. Zero characters inserted |
-| **Saying "hey WISPI"** | Hands-free without touching anything. Listens to the mic — see below |
+| **Saying "wispi"** | Hands-free without touching anything. Listens to the mic — see below |
 | **Single tap on the floating button** | Start or stop dictation |
 | **Double tap on the button** | Opens the touch keyboard |
 | Drag the button | Move it; position is saved automatically |
@@ -227,7 +227,7 @@ uv run python tools/e2e_pipeline.py         # 21 automated tests, no human voice
 uv run python tools/test_wake.py            # 36 wake-word cases, no voice needed
 ```
 
-### "hey WISPI" — dictating without touching anything
+### "wispi" — dictating without touching anything
 
 > **This ships enabled in `config.yaml`.** It's the only feature that analyses the
 > microphone without you asking for anything: while it's on, whatever is said near the
@@ -243,34 +243,43 @@ uv run python tools/test_wake.py            # 36 wake-word cases, no voice neede
 > The *Palabra clave* tab of the settings window does the same. The code default is
 > `false`; it's this `config.yaml` that switches it on.
 
-Say "hey WISPI", hear the chime, talk, and it stops when you go quiet. It does not
-replace `Ctrl+Win` — that stays the fast path and the one that never fails — it covers
-the case where your hands aren't on the keyboard.
+Say "wispi" (with or without "hey"/"oye" in front — both work), hear the chime, talk,
+and it stops when you go quiet. It does not replace `Ctrl+Win` — that stays the fast
+path and the one that never fails — it covers the case where your hands aren't on the
+keyboard.
+
+> It started as "hey WISPI". Changed to just the name on 2026-08-10: with the filler
+> word, one real attempt out of several didn't fire — every "hey" said slightly
+> differently shifts the similarity of the whole phrase — and without it there are
+> fewer syllables that can go wrong. "Hey wispi" still gets recognized the same way;
+> it just isn't what you need to say anymore.
 
 **Why it doesn't burn CPU.** The obvious approach is running Whisper over a sliding
 window every second, and that means fans forever: the encoder cost is *fixed*. WISPI
 segments first and recognizes second, so the recognizer only ever sees a **short,
 isolated utterance** — between 0.25 and 2 s of speech, closed by 350 ms of silence —
-which is exactly the shape of saying "hey WISPI" and stopping. In a quiet room the
+which is exactly the shape of saying "wispi" and stopping. In a quiet room the
 recognizer is **never called**; with a meeting, a phone call or the TV on, it isn't
 either: that's continuous speech and it's discarded without looking at the content.
 Check it yourself with `--wake` and watch the *analizados* counter.
 
 **Why there's no new dependency.** Porcupine needs a Picovoice account; openWakeWord
-ships no "hey wispi" and training one takes hours; Vosk only accepts words in its
+ships no "wispi" and training one takes hours; Vosk only accepts words in its
 lexicon and "wispi" isn't Spanish. There's already an engine loaded and a microphone
 open here, so the detector uses a separate `tiny` (440 ms per candidate at 2 threads,
 measured) and downloads nothing new.
 
 **Matching is fuzzy on purpose.** "wispi" isn't a Spanish word and the model spells it
-differently every time: *Wispy, Guispi, Vispi, wis pi*. Demanding an exact string would
-mean demanding the model nail an invented word. It compares by similarity with two
-thresholds, and the second one — the name alone — is what stops **"hey wifi"** from
-counting. The 18 accepted variants and 18 rejected traps live in `tools/test_wake.py`;
+differently every time: *Wispy, Guispi, Vispi, Wisbi*. Demanding an exact string would
+mean demanding the model nail an invented word. It compares by similarity, and there's a
+second problem a threshold alone can't fix: without the "hey" anchor, "wispi" lands in a
+neighborhood of real words — **"whisky"** scores the same as "Guispi"; **"wisin"** the
+same as "Wisbi" — so those two get blocked by exact name (`wake._EXCLUDE`), not by
+threshold. The accepted variants and 32 rejected traps live in `tools/test_wake.py`;
 run it if you touch a threshold.
 
 **The wake phrase is never typed:** on waking, recording starts *without* pre-roll,
-precisely so the tail of "hey WISPI" doesn't end up dictated.
+precisely so the tail of "wispi" doesn't end up dictated.
 
 And it **only listens at rest**. While recording, transcribing, polishing or paused the
 detector is deaf: it can't hear itself and can't steal cores from the real engine.
@@ -496,7 +505,7 @@ wispi/
   winapi.py        ALL ctypes declarations (Win64 bugs are type bugs)
   hotkey.py        WH_KEYBOARD_LL hook + watchdog          ← failure point #1
   audio.py         permanent InputStream + pre-roll ring
-  wake.py          "hey WISPI": segments first, recognizes only then
+  wake.py          "wispi": segments first, recognizes only then
   asr/base.py      the Protocol that makes the engine swappable
   inject/          Ctrl+V / Shift+Insert / Unicode cascade ← failure point #2
   postprocess/     level 0 (rules + dictionary) and level 1 (Ollama)
