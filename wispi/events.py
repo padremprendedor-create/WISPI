@@ -26,6 +26,11 @@ class HookEvent(enum.IntEnum):
     # a proposito, para que la maquina de estados siga teniendo UNA sola entrada y
     # no haya dos caminos que puedan divergir.
     UI_TOGGLE = 6
+    # Tampoco lo emite el hook: lo pone `wake.py` al oir "hey WISPI". Misma cola,
+    # misma razon. La diferencia con UI_TOGGLE es que este NUNCA corta un dictado
+    # en curso (el detector esta desarmado mientras se graba) y arranca sin
+    # pre-roll, para que la propia frase de activacion no acabe escrita.
+    WAKE = 7
 
 
 # Lo que viaja por la cola: (HookEvent, vk, t_ns). Tupla plana, sin allocs extra.

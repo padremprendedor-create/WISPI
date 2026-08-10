@@ -64,6 +64,53 @@ class HotkeyCfg:
 
 
 @dataclass
+class WakeCfg:
+    """Palabra de activacion. Ver `wispi/wake.py` para el porque de cada numero.
+
+    Desactivada por defecto A PROPOSITO: es la unica funcion de WISPI que analiza
+    el microfono sin que el usuario haya pedido nada. Todo sigue siendo local,
+    pero encenderla tiene que ser una decision, no una sorpresa.
+    """
+
+    enabled: bool = False
+    # Varias frases porque `tiny` no oye "hey" de una sola manera. El emparejado
+    # es difuso, asi que esta lista es de FORMAS, no de ortografias exactas.
+    phrases: list[str] = field(default_factory=lambda: [
+        "hey wispi", "ey wispi", "oye wispi", "hola wispi",
+    ])
+    name: str = "wispi"       # se comprueba aparte y con mas dureza que la frase
+    threshold: float = 0.75   # parecido minimo de la frase entera
+    name_threshold: float = 0.70  # ...y del nombre solo. Es el que tumba "hey wifi"
+    max_tokens: int = 5       # un enunciado mas largo no es una palabra de activacion
+
+    # Modelo del detector, independiente del de dictado. `tiny` = 0,21 s MEDIDOS.
+    model: str = "tiny"
+    cpu_threads: int = 2      # NO los 10 del ASR: esto corre mientras no dictas
+    fallback_chain: list[dict] = field(default_factory=lambda: [
+        {"model": "base"}, {"model": "small"},
+    ])
+    # Vacio por defecto. Sesgar el decoder hacia "WISPI" mejora los aciertos pero
+    # tambien hace que lo escupa sobre audio dudoso: mas falsos positivos.
+    initial_prompt: str = ""
+
+    # -- segmentacion: que se considera un candidato --------------------------
+    rms_threshold: float | None = None   # None = usar audio.silence_threshold
+    min_speech_s: float = 0.25
+    max_speech_s: float = 2.0
+    end_silence_s: float = 0.35
+    preroll_ms: int = 200
+    cooldown_s: float = 2.0
+
+    # -- que pasa al despertar -------------------------------------------------
+    # Sin pre-roll: el ring de 300 ms contiene el final de "hey WISPI" y acabaria
+    # dictado. Criterio C11.3.
+    include_preroll: bool = False
+    # Mas gracia que un dictado normal: entre que suena el tono y el usuario
+    # empieza a hablar pasa mas tiempo que cuando el dedo esta en la tecla.
+    start_grace_s: float = 1.5
+
+
+@dataclass
 class ASRCfg:
     backend: str = "faster-whisper"
     model: str = "small"
@@ -174,6 +221,7 @@ class UICfg:
 class Config:
     audio: AudioCfg = field(default_factory=AudioCfg)
     hotkey: HotkeyCfg = field(default_factory=HotkeyCfg)
+    wake: WakeCfg = field(default_factory=WakeCfg)
     asr: ASRCfg = field(default_factory=ASRCfg)
     postprocess: PostprocessCfg = field(default_factory=PostprocessCfg)
     llm: LLMCfg = field(default_factory=LLMCfg)

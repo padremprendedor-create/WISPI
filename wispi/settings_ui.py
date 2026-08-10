@@ -59,6 +59,7 @@ class SettingsWindow:
         nb = ttk.Notebook(self.win)
         nb.pack(fill="both", expand=True, padx=10, pady=(10, 0))
         self._tab_general(nb)
+        self._tab_wake(nb)
         self._tab_motor(nb)
         self._tab_limpieza(nb)
         self._tab_escritura(nb)
@@ -189,6 +190,87 @@ class SettingsWindow:
                           "ni Ctrl+Alt+tecla, que Windows trata igual que AltGr.",
                   foreground="#a05a00", wraplength=560, justify="left").grid(
             row=r, column=0, columnspan=2, sticky="w", pady=(6, 0))
+
+    def _tab_wake(self, nb) -> None:
+        f = self._pagina(nb, "Palabra clave")
+        r = 0
+
+        ttk.Label(f, text='Decir "hey WISPI" arranca el dictado sin tocar nada.',
+                  font=("", 9, "bold")).grid(row=r, column=0, columnspan=2, sticky="w")
+        r += 1
+        ttk.Label(f, text="Entra en manos libres: hablas y corta solo cuando callas. "
+                          "No sustituye a Ctrl+Win, que sigue siendo el camino rapido; "
+                          "esto es para cuando no tienes las manos en el teclado.",
+                  foreground="#6e7681", wraplength=560, justify="left").grid(
+            row=r, column=0, columnspan=2, sticky="w", pady=(2, 8))
+        r += 1
+
+        c = self._fila(f, r, "Escuchar la palabra clave",
+                       "Mientras esta encendido, WISPI analiza el microfono EN TU "
+                       "MAQUINA, sin salir a internet, para oir la frase. Solo escucha "
+                       "cuando no esta haciendo nada: mientras dicta, transcribe o esta "
+                       "en pausa, esta sordo.")
+        ttk.Checkbutton(c, text="Encendida", variable=self._var(
+            "wake.enabled", self.cfg.wake.enabled)).pack(side="left")
+        r += 2
+
+        c = self._fila(f, r, "Sensibilidad de la frase",
+                       "Parecido minimo con la frase entera. Bajalo si no te reconoce; "
+                       "subelo si se activa sola. Entre 0,65 y 0,85.")
+        ttk.Spinbox(c, from_=0.50, to=0.95, increment=0.01, width=6, format="%.2f",
+                    textvariable=self._var("wake.threshold",
+                                           self.cfg.wake.threshold)).pack(side="left")
+        r += 2
+
+        c = self._fila(f, r, "Sensibilidad del nombre",
+                       "Igual pero mirando solo 'wispi'. Este es el que evita que "
+                       "'hey wifi' cuente como activacion, asi que bajarlo de 0,65 "
+                       "abre falsos positivos.")
+        ttk.Spinbox(c, from_=0.50, to=0.95, increment=0.01, width=6, format="%.2f",
+                    textvariable=self._var("wake.name_threshold",
+                                           self.cfg.wake.name_threshold)).pack(side="left")
+        r += 2
+
+        c = self._fila(f, r, "Margen para empezar a hablar (s)",
+                       "Tras el tono, cuanto puedes tardar en arrancar antes de que "
+                       "lo de por terminado.")
+        ttk.Spinbox(c, from_=0.3, to=6.0, increment=0.1, width=6, format="%.1f",
+                    textvariable=self._var("wake.start_grace_s",
+                                           self.cfg.wake.start_grace_s)).pack(side="left")
+        r += 2
+
+        c = self._fila(f, r, "Espera entre activaciones (s)",
+                       "Tras despertar, ignora la frase durante este rato.")
+        ttk.Spinbox(c, from_=0.0, to=10.0, increment=0.5, width=6, format="%.1f",
+                    textvariable=self._var("wake.cooldown_s",
+                                           self.cfg.wake.cooldown_s)).pack(side="left")
+        r += 2
+
+        ttk.Label(f, text="Frases que despiertan", font=("", 9, "bold")).grid(
+            row=r, column=0, columnspan=2, sticky="w", pady=(14, 4))
+        r += 1
+        ttk.Label(f, text="Una por linea. Son FORMAS, no ortografias exactas: la "
+                          "comparacion es por parecido, porque 'wispi' no es una "
+                          "palabra espanola y el modelo la escribe distinta cada vez "
+                          "(Wispy, Guispi, Vispi). No hace falta anadir variantes.",
+                  foreground="#6e7681", wraplength=560, justify="left").grid(
+            row=r, column=0, columnspan=2, sticky="w")
+        r += 1
+        self.txt_frases = tk.Text(f, height=5, width=44)
+        self.txt_frases.insert("1.0", "\n".join(self.cfg.wake.phrases))
+        self.txt_frases.grid(row=r, column=0, columnspan=2, sticky="ew", pady=(6, 0))
+        r += 1
+
+        ttk.Label(f, text="Para calibrarla viendo lo que oye de verdad:\n"
+                          "   uv run python -m wispi.selftest --wake",
+                  foreground="#6e7681", wraplength=560, justify="left").grid(
+            row=r, column=0, columnspan=2, sticky="w", pady=(10, 0))
+        r += 1
+        ttk.Label(f, text="Encenderla la primera vez puede tardar unos segundos: carga "
+                          "un modelo pequeno aparte. Si no lo tienes en disco, mira el "
+                          "log; WISPI te dira que hacer y Ctrl+Win seguira igual.",
+                  foreground="#a05a00", wraplength=560, justify="left").grid(
+            row=r, column=0, columnspan=2, sticky="w", pady=(8, 0))
 
     def _tab_motor(self, nb) -> None:
         f = self._pagina(nb, "Motor de voz")
@@ -449,6 +531,14 @@ class SettingsWindow:
         desc = self._cb_ruta.get()
         cambios.setdefault("injection", {})["route"] = next(
             (k for k, d in RUTAS if d == desc), self.cfg.injection.route)
+        frases = [l.strip().lower() for l in
+                  self.txt_frases.get("1.0", "end").splitlines() if l.strip()]
+        # Si el usuario vacia la caja NO se guarda una lista vacia: eso dejaria el
+        # detector encendido y sordo, que es la peor combinacion posible (gasta y
+        # no responde). Se queda con las frases que ya habia.
+        if frases:
+            cambios.setdefault("wake", {})["phrases"] = frases
+
         apps = [l.strip().lower() for l in
                 self.txt_terminales.get("1.0", "end").splitlines() if l.strip()]
         if apps:

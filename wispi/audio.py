@@ -96,6 +96,16 @@ class AudioCapture:
         self._peak_rms: float = 0.0
         self._current_rms: float = 0.0
         self._truncated: bool = False
+        # Gracia efectiva de ESTA grabacion. Normalmente `cfg.start_grace_s`, pero
+        # la palabra de activacion pide mas: entre el tono y la primera palabra
+        # pasa mas tiempo que cuando ya tienes el dedo en la tecla.
+        self._grace_s: float = float(cfg.start_grace_s)
+
+        # -- derivacion para el detector de palabra de activacion --------------
+        # Un unico callable, o None. El callback de PortAudio le pasa cada bloque
+        # que NO va a un dictado. Lo pone `app.py`; `audio.py` no sabe que hay al
+        # otro lado ni le importa.
+        self._wake_sink = None
 
         # -- diagnostico ------------------------------------------------------
         self._overflows: int = 0
@@ -198,13 +208,18 @@ class AudioCapture:
             self.log.debug("audio: close() del stream fallo: %s", e)
 
     # -------------------------------------------------------------- grabacion
-    def begin_recording(self) -> None:
+    def begin_recording(self, include_preroll: bool = True,
+                        grace_s: float | None = None) -> None:
         """Vuelca el ring de pre-roll y empieza a acumular.
 
         Orden deliberado: primero se arma el buffer vacio y se levanta la
         bandera (el callback deja de alimentar el ring y empieza a alimentar
         `_frames`), y SOLO despues se drena el ring y se antepone. Al reves
         habria una ventana en la que el audio no va a ningun sitio.
+
+        `include_preroll=False` tira el ring en vez de anteponerlo. Lo usa la
+        palabra de activacion: ahi el pre-roll contiene el final de "hey WISPI",
+        y anteponerlo seria escribir la propia frase de activacion (C11.3).
         """
         if self._recording:
             return
@@ -220,7 +235,12 @@ class AudioCapture:
         self._peak_rms = 0.0
         self._current_rms = 0.0
         self._truncated = False
+        self._grace_s = float(self.cfg.start_grace_s if grace_s is None else grace_s)
         self._recording = True
+
+        if not include_preroll:
+            self._ring.clear()
+            return
 
         # Drenar con popleft() y no con list(deque): iterar un deque acotado
         # mientras otro hilo hace append puede lanzar RuntimeError. popleft()
@@ -299,6 +319,29 @@ class AudioCapture:
         self._peak_rms = 0.0
         self._current_rms = 0.0
         self._truncated = False
+
+    # ------------------------------------------------------- palabra de activacion
+    def set_wake_sink(self, sink) -> None:
+        """Deriva al detector cada bloque que NO va a un dictado. None lo apaga.
+
+        Es una asignacion de atributo (atomica bajo el GIL), asi que se puede
+        encender y apagar en caliente sin parar el stream.
+        """
+        self._wake_sink = sink
+
+    def to_target(self, raw: np.ndarray) -> np.ndarray:
+        """float32 mono contiguo a `cfg.sample_rate`. Publico para el detector.
+
+        El detector acumula bloques al rate REAL del stream (que puede ser 48 kHz
+        si el dispositivo rechaza 16) y convierte el enunciado ENTERO de una vez.
+        Convertir bloque a bloque metria un artefacto en cada juntura.
+        """
+        return self._to_target(raw)
+
+    @property
+    def stream_rate(self) -> int:
+        """Rate REAL del stream abierto, no el del contrato del ASR."""
+        return self._rate
 
     # -------------------------------------------------------------- consultas
     @property
@@ -408,6 +451,12 @@ class AudioCapture:
 
             if not self._recording:
                 self._ring.append((block, rms))
+                # La palabra de activacion, si esta encendida. Un `deque.append`
+                # al otro lado y nada mas: la regla del callback (ni locks, ni
+                # logging, ni excepciones que escapen) tambien aplica ahi.
+                sink = self._wake_sink
+                if sink is not None:
+                    sink(block, rms)
                 return
 
             n = block.shape[0]
@@ -440,7 +489,7 @@ class AudioCapture:
             # solo alcanza en los primeros 300 ms tras start() y nunca en un dictado.
             #
             # _rec_frames ya viene incrementado con n en la linea de arriba.
-            if self._rec_frames < int(self.cfg.start_grace_s * self._rate):
+            if self._rec_frames < int(self._grace_s * self._rate):
                 self._silence_frames = 0
             elif rms < self.cfg.silence_threshold:
                 self._silence_frames += n

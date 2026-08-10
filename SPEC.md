@@ -143,6 +143,41 @@ Contra estos se verifica, **nunca contra el `status` que un agente se ponga a s�
 - **C10.3** Editar `config.yaml` recarga en < 3 s sin reiniciar.
 - **C10.4** Desconectar el micro USB en caliente produce error visible, no crash.
 
+### C11 — Palabra de activación ("hey WISPI")
+
+Añadido en v0.3. Objetivo real: **dictar sin tocar nada** cuando las manos no están en el
+teclado. No sustituye a `Ctrl+Win`, que sigue siendo el camino rápido y el que nunca falla.
+
+- **C11.1** Con `wake.enabled: false` (default) el detector **no existe**: cero hilos nuevos,
+  cero modelos cargados, cero CPU. Verificable en `status()["wake"]["enabled"] == False`
+  y en que `wispi.log` no registra ninguna línea de `wake`.
+- **C11.2** Decir "hey WISPI" con WISPI en reposo arranca un dictado en **manos libres**
+  (corta solo por silencio), sin tocar teclado ni ratón. 🔴 **HUMANO** — exige voz real.
+- **C11.3** **La frase de activación nunca se escribe.** Tras despertar, el texto insertado
+  no contiene "hey wispi" ni variantes. Es el criterio que decide el diseño: la grabación
+  arranca **sin pre-roll** (`wake.include_preroll: false`).
+- **C11.4** El detector **solo escucha en reposo**. Mientras se graba, transcribe, pule o
+  está en pausa, está desarmado: no puede auto-dispararse con el propio dictado ni robar
+  CPU al ASR real. Verificable en `status()["wake"]["armed"]`.
+- **C11.5** **Coste en reposo ≈ 0.** Con la sala en silencio no se llama al ASR ni una vez:
+  el reconocedor solo corre sobre *enunciados cortos aislados* (entre `min_speech_s` y
+  `max_speech_s`, cerrados por `end_silence_s` de silencio). Una conversación seguida o una
+  llamada no producen candidatos. Verificable con `--wake` en `wispi.selftest`:
+  `checks` se queda en 0 con la sala callada.
+- **C11.6** **Cero falsos positivos** sobre las trampas del corpus de texto:
+  "hey wifi", "hey", "whisky", "y esto", "es que sí", "wikipedia".
+  Verificable sin voz con `tools/test_wake.py`.
+- **C11.7** Las variantes que Whisper produce de verdad para la frase **sí** disparan:
+  "Hey, Wispi.", "Ey Wispy", "Hey, Guispi", "Ay, Wispi", "Oye Wispi", "hey wis pi".
+  Verificable sin voz con `tools/test_wake.py`.
+- **C11.8** Si el modelo del detector no carga, se avisa con WARNING, la palabra de
+  activación queda desactivada y **WISPI sigue dictando con `Ctrl+Win`**. Nunca tumba la app.
+- **C11.9** Privacidad: con `logging.include_text: false` (default) **nada de lo que oye el
+  detector se escribe en ningún log**, ni siquiera lo que descarta. Verificable con grep
+  sobre `wispi.log` tras hablar 5 minutos junto al micro.
+- **C11.10** Tras un disparo hay `cooldown_s` de refractario: hablar seguido no encadena
+  dos activaciones.
+
 ## 4. Bloques y checkpoints
 
 | Bloque | Contenido | Checkpoint |
@@ -154,6 +189,7 @@ Contra estos se verifica, **nunca contra el `status` que un agente se ponga a s�
 | 4 | Bandeja, hot-reload, autoarranque | 🔴 **HUMANO** — exige reinicio |
 | 5 | Nivel 1 LLM + inserción optimista | 🟡 automatizable |
 | 6 | Medición sobre ≥ 100 dictados reales | 🔴 **HUMANO** — exige uso real |
+| 7 | Palabra de activación "hey WISPI" (C11) | 🟡 lógica verificada sin voz (`tools/test_wake.py`); C11.2/C11.3 🔴 |
 
 ## 5. Acciones que requieren permiso humano
 
@@ -211,6 +247,29 @@ tuvo. En una corrida, 14 de 18 clips fueron a parar a otra ventana.
 
 `tools/e2e_pipeline.py` ahora **comprueba el PID del foco contra el de la diana antes
 de inyectar** y, si no coinciden, no inyecta. Es una guarda de seguridad, no del test.
+
+### H4 — Un solo umbral no distingue "hey WISPI" de "hey wifi"
+
+El diseño obvio de la palabra de activación es un umbral de parecido contra la frase
+entera. **No funciona.** Medido con `difflib.SequenceMatcher` sobre las cadenas
+normalizadas:
+
+| candidato | contra "hey wispi" | contra "wispi" solo | ¿debe disparar? |
+|---|---|---|---|
+| "hey guispi" | 0,824 | 0,727 | sí |
+| **"hey wifi"** | **0,800** | **0,667** | **no** |
+| "hey" | 0,545 | — | no |
+
+Con un umbral único, cualquier valor que acepte "guispi" acepta también "wifi": están a
+24 milésimas. Lo que los separa es mirar **el nombre por separado**, donde la distancia
+se abre a 60 milésimas. De ahí los dos umbrales (`threshold` 0,75 y `name_threshold`
+0,70) y de ahí que `name_threshold` no se pueda bajar de 0,65 sin abrir falsos positivos.
+
+Segundo hallazgo del mismo sitio: hizo falta una regla fonética, **-y final → -i**.
+"hey guispy" se quedaba en 0,706 y no disparaba, aunque es una transcripción
+perfectamente normal de la frase. En español las dos terminaciones suenan igual y el
+modelo elige sin criterio; aplicando la regla a los dos lados de la comparación sube a
+0,824 sin inventar parecidos. Ninguna de las 18 trampas empeoró.
 
 ## 7. Regla de verificación
 

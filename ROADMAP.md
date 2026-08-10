@@ -1,6 +1,6 @@
 # ROADMAP — WISPI
 
-**Última actualización:** 2026-08-10 · **Estado:** v0.2 en uso diario real, **publicado como open source**
+**Última actualización:** 2026-08-10 · **Estado:** v0.2 en uso diario real, **publicado como open source** · v0.3 (palabra de activación) construida, pendiente de prueba con voz
 
 El objetivo sigue siendo el de [SPEC.md](SPEC.md): que Wispr Flow se pueda desinstalar sin
 echarlo de menos. Todo lo de aquí se ordena por eso, no por lo interesante que sea.
@@ -40,6 +40,24 @@ echarlo de menos. Todo lo de aquí se ordena por eso, no por lo interesante que 
       `historial-privado`
 - [x] **Repo público** desde el 2026-08-10 — github.com/padremprendedor-create/WISPI
 
+### v0.3 — palabra de activación "hey WISPI" (2026-08-10)
+- [x] `wispi/wake.py`: segmentador por energía + reconocedor `tiny` aparte, sin
+      dependencias nuevas y sin descargas nuevas. **La decisión de diseño**: no se
+      corre Whisper sobre una ventana deslizante (coste fijo del encoder = ventiladores
+      para siempre), se segmenta primero y solo llega al ASR un enunciado corto y
+      aislado. Con la sala callada, cero llamadas
+- [x] Emparejado difuso con dos umbrales. El segundo, el del nombre solo, es el que
+      tumba "hey wifi" (0,80 contra la frase entera, 0,67 contra el nombre)
+- [x] Desarmado fuera de IDLE (no se oye a sí mismo), arranque sin pre-roll (la frase
+      de activación no se escribe), refractario de 2 s
+- [x] Pestaña *Palabra clave* en configuración, `selftest --wake` para calibrar en vivo
+- [x] `tools/test_wake.py`: 18 variantes + 18 trampas + 6 escenarios de segmentación.
+      **36/36 y 6/6 sin voz humana**
+- [x] Apagada por defecto: es la única función que analiza el micro sin que se lo pidan
+- [ ] 🔴 **Falta lo que ningún agente puede cerrar: probarla con voz real** (C11.2). Lo
+      verificado es la lógica sobre texto y audio sintético, no que `tiny` oiga "wispi"
+      en boca de Junior
+
 A partir de aquí el repositorio lo puede leer cualquiera. Dos consecuencias que
 conviene tener presentes al tocarlo:
 
@@ -64,6 +82,8 @@ exactamente lo que aquí falta.
 - [ ] **C10.1** — reiniciar Windows y comprobar el autoarranque
       (`scripts/install_autostart.ps1`)
 - [ ] **C6.1** — 5 s de silencio con la tecla mantenida → cero caracteres
+- [ ] **C11.2/C11.3** — "hey WISPI" con voz real: que despierte, y que la frase de
+      activación **no** acabe escrita. Lo demás de C11 está verificado sin voz
 
 ---
 

@@ -217,6 +217,7 @@ contramedida real es que el código no escriba lo que ve. El default es sin elev
 | Mantener `Ctrl+Win` | Graba mientras la sujetas (push-to-talk) |
 | Doble toque rápido de `Ctrl+Win` | Manos libres: corta solo tras 1,2 s de silencio |
 | `Esc` mientras graba | Cancela. Cero caracteres insertados |
+| **Decir "hey WISPI"** | Manos libres sin tocar nada. Apagado por defecto — ver abajo |
 | **Un toque en el botón flotante** | Empieza o termina el dictado |
 | **Doble toque en el botón** | Abre el teclado táctil |
 | Arrastrar el botón | Moverlo; la posición se guarda sola |
@@ -225,9 +226,56 @@ contramedida real es que el código no escriba lo que ve. El default es sin elev
 uv run python -m wispi                      # bandeja, sin consola
 uv run python -m wispi --console            # consola, para desarrollo
 uv run python -m wispi.selftest --all       # diagnóstico por partes
+uv run python -m wispi.selftest --wake      # calibrar la palabra de activación
 uv run python -m wispi.bench --analyze      # ¿toca migrar de motor?
 uv run python tools/e2e_pipeline.py         # 21 pruebas automáticas, sin voz humana
+uv run python tools/test_wake.py            # 36 casos de la palabra clave, sin voz
 ```
+
+### "hey WISPI" — dictar sin tocar nada
+
+Está **apagada por defecto**. Enciéndela en `config.yaml` (o en la pestaña *Palabra
+clave* de la ventana de configuración):
+
+```yaml
+wake:
+  enabled: true
+```
+
+Dices "hey WISPI", suena el tono, hablas, y corta solo cuando callas. No sustituye a
+`Ctrl+Win` —que sigue siendo el camino rápido y el que nunca falla— sino que cubre el
+caso de no tener las manos en el teclado.
+
+**Por qué no quema la CPU.** Lo obvio sería correr Whisper sobre una ventana deslizante
+cada segundo, y eso son ventiladores para siempre: el coste del encoder es *fijo*.
+WISPI segmenta primero y reconoce después, así que al reconocedor solo le llega un
+**enunciado corto y aislado** —entre 0,25 y 2 s de voz, cerrado por 350 ms de silencio—,
+que es la forma exacta de decir "hey WISPI" y callar. Con la sala en silencio el
+reconocedor **no se llama ni una vez**; con una reunión, una llamada o la tele de fondo,
+tampoco: eso es habla continua y se descarta sin mirar el contenido. Verificable:
+
+```bash
+uv run python -m wispi.selftest --wake   # mira el contador "analizados"
+```
+
+**Por qué no hay una dependencia nueva.** Porcupine exige una cuenta de Picovoice;
+openWakeWord no trae "hey wispi" y entrenarlo son horas; Vosk solo admite palabras de su
+léxico y "wispi" no existe en español. Aquí ya hay un motor cargado y un micrófono
+abierto, así que el detector usa un `tiny` aparte (440 ms por candidato con 2 hilos,
+medido) y no descarga nada nuevo.
+
+**El emparejado es difuso a propósito.** "wispi" no es una palabra española y el modelo
+la escribe distinta cada vez: *Wispy, Guispi, Vispi, wis pi*. Exigir la cadena exacta
+sería exigir que acierte una palabra inventada. Se compara por parecido con dos
+umbrales, y el segundo —el del nombre solo— es el que evita que **"hey wifi"** cuente
+como activación. Las 18 variantes que se aceptan y las 18 trampas que se rechazan están
+en `tools/test_wake.py`; si tocas un umbral, ejecútalo.
+
+**La frase de activación nunca se escribe:** al despertar, la grabación arranca *sin*
+pre-roll, justo para que el final de "hey WISPI" no acabe dictado.
+
+Y **solo escucha en reposo**. Mientras graba, transcribe, pule o está en pausa, el
+detector está sordo: ni se oye a sí mismo ni le roba núcleos al motor de verdad.
 
 ### Teclado táctil (sin tocar el teclado físico)
 
@@ -381,6 +429,11 @@ como *"Create an endpoint"*.
   (`logging.include_text: false`).
 - El logger nunca registra el `vkCode` de teclas fuera del combo.
 - Con `local_files_only: true`, WISPI arranca y transcribe sin red.
+- **La palabra de activación viene apagada.** Es la única función que analiza el
+  micrófono sin que hayas pedido nada, así que encenderla tiene que ser una decisión
+  tuya y no una sorpresa. Cuando está encendida sigue sin salir un byte —el
+  reconocimiento es local, igual que el dictado— y **lo que oye no se guarda en ningún
+  log**, ni siquiera lo que descarta, salvo que pongas `include_text: true` a propósito.
 
 WISPI instala un hook de teclado global, lee el portapapeles e inyecta pulsaciones. Eso
 merece más de un párrafo: el modelo de amenaza completo, qué comprobar y en qué fichero,
@@ -453,6 +506,7 @@ wispi/
   winapi.py        TODAS las declaraciones ctypes (los bugs de Win64 son de tipos)
   hotkey.py        hook WH_KEYBOARD_LL + watchdog          ← punto de fallo nº 1
   audio.py         InputStream permanente + ring de pre-roll
+  wake.py          "hey WISPI": segmenta y solo entonces reconoce
   asr/base.py      el Protocol que hace intercambiable el motor
   inject/          cascada Ctrl+V / Shift+Insert / Unicode ← punto de fallo nº 2
   postprocess/     nivel 0 (reglas + diccionario) y nivel 1 (Ollama)
@@ -462,6 +516,7 @@ tools/
   make_corpus.py   genera el corpus con Piper (no hace falta voz humana)
   target_window.py ventana diana para probar la inyección cross-process
   e2e_pipeline.py  las 21 pruebas end-to-end
+  test_wake.py     36 casos de la palabra clave (emparejado + segmentador)
 ```
 
 ## Los dos sitios donde esto se puede romper

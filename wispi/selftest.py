@@ -190,6 +190,85 @@ def test_llm(cfg: Config) -> bool:
     return True
 
 
+def test_wake(cfg: Config, seconds: int = 30) -> bool:
+    """Escucha en vivo y ENSENA lo que oye. Es la herramienta de calibrado.
+
+    Lo que hay que mirar no es solo si dispara, sino `checks`: si sube estando
+    callado, el umbral de RMS esta bajo para tu sala y el detector se pone a
+    reconocer ruido (criterio C11.5).
+    """
+    _hr("PALABRA DE ACTIVACION")
+    import queue as _q
+    from .audio import AudioCapture
+    from .wake import WakeWord
+
+    print(f"  frases: {', '.join(cfg.wake.phrases)}")
+    print(f"  umbrales: frase>={cfg.wake.threshold} nombre>={cfg.wake.name_threshold}")
+    if not cfg.wake.enabled:
+        print(f"{WARN} wake.enabled esta en false; aqui se prueba igual, pero WISPI "
+              f"no la escuchara hasta que lo pongas en true")
+
+    cap = AudioCapture(cfg.audio, logging_setup.get("audio"))
+    try:
+        cap.start()
+    except Exception as e:
+        print(f"{BAD} no pude abrir el microfono: {e}")
+        return False
+
+    q: _q.SimpleQueue = _q.SimpleQueue()
+    # log_text=True SOLO aqui: es un diagnostico interactivo que el usuario ha
+    # pedido a mano y sin ver lo que se oye no se puede calibrar nada. En la app
+    # manda `logging.include_text`, que por defecto es false (C11.9).
+    wake = WakeWord(cfg.wake, cfg.asr, cap, q, logging_setup.get("wake"), log_text=True)
+    print("\n  Cargando el detector...")
+    if not wake.start():
+        print(f"{BAD} no arranco (revisa wake.enabled y el log)")
+        cap.stop()
+        return False
+    wake.set_armed(True)
+    cap.set_wake_sink(wake.feed)
+
+    t_end = time.time() + seconds
+    while wake._asr is None and wake.is_alive and time.time() < t_end:
+        time.sleep(0.2)
+    if wake._asr is None:
+        print(f"{BAD} el detector no cargo ningun modelo. Causa: {wake.stats()['error']}")
+        cap.stop()
+        wake.stop()
+        return False
+    print(f"{OK} detector listo: {wake._asr.describe().get('model')}")
+    print(f"\n  Di \"hey WISPI\" unas cuantas veces durante {seconds} s.")
+    print("  Haz tambien la prueba contraria: quedate callado y habla seguido; ")
+    print("  ninguna de las dos deberia subir el contador de 'analizados'.\n")
+
+    vistos, t_end = 0, time.time() + seconds
+    while time.time() < t_end:
+        try:
+            kind, _vk, _t = q.get(timeout=0.25)
+            vistos += 1
+            print(f"  {'>' * 3} ACTIVADO ({kind.name})  score={wake.last_score} "
+                  f"texto={wake.last_text!r}")
+        except _q.Empty:
+            print(f"  analizados={wake.checks}  activaciones={wake.detections}  "
+                  f"ultimo={wake.last_score:.3f} {wake.last_text[:32]!r}      ", end="\r")
+
+    cap.set_wake_sink(None)
+    cap.stop()
+    wake.stop()
+    st = wake.stats()
+    print(f"\n\n  enunciados analizados: {st['checks']}  (llamadas reales al ASR)")
+    print(f"  activaciones:          {st['detections']}")
+    print(f"  ultima inferencia:     {st['last_infer_ms']} ms")
+
+    if vistos == 0:
+        print(f"{WARN} no dispato ni una vez. Si el texto de arriba se parecia a "
+              f"'hey wispi', baja wake.threshold; si no se parecia en nada, prueba "
+              f"con wake.model: base.")
+        return False
+    print(f"{OK} la palabra de activacion responde")
+    return True
+
+
 def test_inject(cfg: Config) -> bool:
     _hr("INYECCION DE TEXTO")
     from .inject.injector import Injector
@@ -217,12 +296,17 @@ def test_inject(cfg: Config) -> bool:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="wispi.selftest")
-    for f in ("audio", "hook", "asr", "llm", "inject", "all"):
+    for f in ("audio", "hook", "asr", "llm", "wake", "inject", "all"):
         ap.add_argument(f"--{f}", action="store_true")
     ap.add_argument("--hook-seconds", type=int, default=20)
+    ap.add_argument("--wake-seconds", type=int, default=30)
     args = ap.parse_args(argv)
 
-    chosen = [f for f in ("audio", "hook", "asr", "llm", "inject") if getattr(args, f)]
+    chosen = [f for f in ("audio", "hook", "asr", "llm", "wake", "inject")
+              if getattr(args, f)]
+    # `wake` NO entra en --all: carga un segundo modelo y exige que alguien hable.
+    # Un diagnostico que se cuelga esperando voz no sirve para "corre esto y
+    # mandame la salida", que es para lo que existe --all.
     if args.all or not chosen:
         chosen = ["audio", "asr", "llm", "hook", "inject"]
 
@@ -233,7 +317,8 @@ def main(argv: list[str] | None = None) -> int:
     results = {}
     for name in chosen:
         fn = {"audio": test_audio, "hook": lambda c: test_hook(c, args.hook_seconds),
-              "asr": test_asr, "llm": test_llm, "inject": test_inject}[name]
+              "asr": test_asr, "llm": test_llm, "inject": test_inject,
+              "wake": lambda c: test_wake(c, args.wake_seconds)}[name]
         try:
             results[name] = fn(cfg)
         except Exception as e:

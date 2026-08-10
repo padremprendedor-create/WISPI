@@ -18,6 +18,7 @@ es threading con ceremonia encima. Aqui se salta la ceremonia.
   MainThread    -> bandeja (pystray) o espera en modo consola
   wispi-hook    -> SetWindowsHookExW + GetMessageW. Callback < 0.5 ms.
   PortAudio cb  -> ring de pre-roll + acumulacion
+  wispi-wake    -> palabra de activacion, SOLO si wake.enabled. Ver wake.py.
   wispi-state   -> ESTE bucle. Consume eventos, decide, despacha.
   wispi-asr     -> ThreadPoolExecutor(1). Bloqueante.
   wispi-llm     -> ThreadPoolExecutor(1). I/O.
@@ -47,6 +48,7 @@ from .inject.target import Target, current_target
 from .metrics import DictationTrace, Metrics, now_ns
 from .postprocess.hallucinations import is_whisper_hallucination
 from .postprocess.pipeline import PostProcessor
+from .wake import WakeWord
 from .asr.registry import build_with_fallback
 
 log = logging_setup.get("app")
@@ -74,6 +76,9 @@ class WispiApp:
         self.post = PostProcessor(cfg.postprocess, cfg.llm, logging_setup.get("post"))
         self.injector = Injector(cfg.injection, logging_setup.get("inject"))
         self.fb = Feedback(cfg.ui.chime_enabled, cfg.ui.chime_volume)
+        self.wake = WakeWord(cfg.wake, cfg.asr, self.audio, self.events_q,
+                             logging_setup.get("wake"),
+                             log_text=cfg.logging.include_text)
         self.asr = None
         self.asr_warnings: list[str] = []
 
@@ -114,6 +119,14 @@ class WispiApp:
         if self.cfg.llm.enabled:
             self.ex_llm.submit(self._warmup_llm)
 
+        # La palabra de activacion se arranca DESPUES del ASR principal a
+        # proposito: los dos cargan un modelo y el que importa es el del dictado.
+        # `start()` no bloquea; el modelo del detector carga en su propio hilo.
+        if self.cfg.wake.enabled:
+            self.audio.set_wake_sink(self.wake.feed)
+            self.wake.start()
+            self.wake.set_armed(True)
+
         hook_ok = self.hook.start()
         self._running.set()
         self._state_thread = threading.Thread(target=self._loop, name="wispi-state",
@@ -144,6 +157,13 @@ class WispiApp:
             self.hook.stop()
         except Exception as e:
             log.warning("fallo al parar el hook: %s", e)
+        try:
+            # Antes que el audio: si el stream muere primero, el sink sigue
+            # apuntando a un detector que ya no consume y el deque crece.
+            self.audio.set_wake_sink(None)
+            self.wake.stop()
+        except Exception as e:
+            log.warning("fallo al parar la palabra de activacion: %s", e)
         try:
             self.audio.stop()
         except Exception as e:
@@ -279,6 +299,10 @@ class WispiApp:
     def _set_state(self, s: State) -> None:
         if s != self.state:
             self.state = s
+            # C11.4: el detector SOLO escucha en reposo. Mientras se graba se
+            # oiria a si mismo, y mientras se transcribe le robaria nucleos al
+            # ASR de verdad. Es una asignacion de bandera: no cuesta nada.
+            self.wake.set_armed(s == State.IDLE and not self._paused)
             if self.on_state_change:
                 try:
                     self.on_state_change(s)
@@ -352,6 +376,7 @@ class WispiApp:
             for w in warns:
                 log.warning("config: %s", w)
             log.info("config recargada")
+            self._sync_wake()
         if self.post.reload_dictionary():
             log.info("diccionario recargado")
 
@@ -362,6 +387,32 @@ class WispiApp:
             if held_s > self.cfg.audio.max_duration_s:
                 log.warning("tope de %.0fs alcanzado; finalizando", self.cfg.audio.max_duration_s)
                 self._finalize(now_ns())
+
+    def _sync_wake(self) -> None:
+        """Enciende o apaga la palabra de activacion tras recargar la config.
+
+        OJO CON LA REFERENCIA: `Config.maybe_reload()` SUSTITUYE las dataclasses
+        de cada seccion por objetos nuevos. La que guardo el detector al
+        construirse se queda apuntando a la vieja, asi que hay que volver a
+        apuntarla a mano o `wake` seria el unico bloque que no se recarga.
+
+        Cambiar `wake.model` en caliente NO recarga el modelo (eso exige
+        reiniciar); lo que si entra al vuelo son las frases, los umbrales y el
+        interruptor.
+        """
+        self.wake.cfg = self.cfg.wake
+        self.wake.log_text = self.cfg.logging.include_text
+        quiere = self.cfg.wake.enabled
+        activo = self.wake.is_alive
+        if quiere and not activo:
+            log.info("wake: encendido desde la configuracion")
+            self.audio.set_wake_sink(self.wake.feed)
+            self.wake.start()
+            self.wake.set_armed(self.state == State.IDLE and not self._paused)
+        elif not quiere and activo:
+            log.info("wake: apagado desde la configuracion")
+            self.audio.set_wake_sink(None)
+            self.wake.stop(join=False)
 
     def _check_hands_free_silence(self) -> None:
         if self.audio.silence_elapsed_s() >= self.cfg.audio.silence_duration_s:
@@ -398,6 +449,16 @@ class WispiApp:
                 self._finalize(t_ns)
             elif self.state == State.IDLE:
                 self._begin(t_ns, hands_free=True)
+            return
+
+        if kind == HookEvent.WAKE:
+            # "hey WISPI". A diferencia de UI_TOGGLE, esto NUNCA corta un dictado
+            # en curso: si el estado no es IDLE el evento se tira. El detector ya
+            # deberia estar desarmado, pero un evento puede haber salido de su
+            # hilo justo antes de que llegara el desarme, y perder un despertar
+            # es infinitamente mejor que cortar una frase a medias.
+            if self.state == State.IDLE:
+                self._begin(t_ns, hands_free=True, from_wake=True)
             return
 
         if kind == HookEvent.COMBO_DOWN:
@@ -450,13 +511,21 @@ class WispiApp:
     # ==================================================================
     # Ciclo de un dictado
     # ==================================================================
-    def _begin(self, t_ns: int, hands_free: bool) -> None:
+    def _begin(self, t_ns: int, hands_free: bool, from_wake: bool = False) -> None:
         seq = self.metrics.next_seq()
         self.trace = DictationTrace(seq=seq)
         self.trace.mark("t0_keydown", t_ns)
         self.cur = Dictation(seq=seq, t_keydown_ns=t_ns)
         self._combo_down_ns = t_ns
-        self.audio.begin_recording()
+        if from_wake:
+            # Sin pre-roll: el ring lleva el final de "hey WISPI" y acabaria
+            # escrito (C11.3). Y con mas gracia inicial, porque aqui el usuario
+            # espera al tono antes de empezar a hablar.
+            self.audio.begin_recording(include_preroll=self.cfg.wake.include_preroll,
+                                       grace_s=self.cfg.wake.start_grace_s)
+            self.trace.set(trigger="wake")
+        else:
+            self.audio.begin_recording()
         self.trace.mark("t1_capture_on")
         self._set_state(State.HANDS_FREE if hands_free else State.RECORDING)
         self.fb.play("start")
@@ -721,6 +790,7 @@ class WispiApp:
             "asr": self.asr.describe() if self.asr else None,
             "asr_warnings": self.asr_warnings,
             "hook": self.hook.stats(),
+            "wake": self.wake.stats(),
             "audio": self.audio.device_info(),
             "audio_error": self.audio.last_error,
         }

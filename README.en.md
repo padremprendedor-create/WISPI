@@ -212,6 +212,7 @@ write down what it sees. That's why the default is unelevated.
 | Hold `Ctrl+Win` | Records while held (push-to-talk) |
 | Quick double-tap of `Ctrl+Win` | Hands-free: stops after 1.2 s of silence |
 | `Esc` while recording | Cancels. Zero characters inserted |
+| **Saying "hey WISPI"** | Hands-free without touching anything. Off by default — see below |
 | **Single tap on the floating button** | Start or stop dictation |
 | **Double tap on the button** | Opens the touch keyboard |
 | Drag the button | Move it; position is saved automatically |
@@ -220,9 +221,53 @@ write down what it sees. That's why the default is unelevated.
 uv run python -m wispi                      # tray, no console
 uv run python -m wispi --console            # console, for development
 uv run python -m wispi.selftest --all       # component diagnostics
+uv run python -m wispi.selftest --wake      # calibrate the wake word
 uv run python -m wispi.bench --analyze      # is it time to change engines?
 uv run python tools/e2e_pipeline.py         # 21 automated tests, no human voice
+uv run python tools/test_wake.py            # 36 wake-word cases, no voice needed
 ```
+
+### "hey WISPI" — dictating without touching anything
+
+**Off by default.** Turn it on in `config.yaml` (or in the *Palabra clave* tab of the
+settings window):
+
+```yaml
+wake:
+  enabled: true
+```
+
+Say "hey WISPI", hear the chime, talk, and it stops when you go quiet. It does not
+replace `Ctrl+Win` — that stays the fast path and the one that never fails — it covers
+the case where your hands aren't on the keyboard.
+
+**Why it doesn't burn CPU.** The obvious approach is running Whisper over a sliding
+window every second, and that means fans forever: the encoder cost is *fixed*. WISPI
+segments first and recognizes second, so the recognizer only ever sees a **short,
+isolated utterance** — between 0.25 and 2 s of speech, closed by 350 ms of silence —
+which is exactly the shape of saying "hey WISPI" and stopping. In a quiet room the
+recognizer is **never called**; with a meeting, a phone call or the TV on, it isn't
+either: that's continuous speech and it's discarded without looking at the content.
+Check it yourself with `--wake` and watch the *analizados* counter.
+
+**Why there's no new dependency.** Porcupine needs a Picovoice account; openWakeWord
+ships no "hey wispi" and training one takes hours; Vosk only accepts words in its
+lexicon and "wispi" isn't Spanish. There's already an engine loaded and a microphone
+open here, so the detector uses a separate `tiny` (440 ms per candidate at 2 threads,
+measured) and downloads nothing new.
+
+**Matching is fuzzy on purpose.** "wispi" isn't a Spanish word and the model spells it
+differently every time: *Wispy, Guispi, Vispi, wis pi*. Demanding an exact string would
+mean demanding the model nail an invented word. It compares by similarity with two
+thresholds, and the second one — the name alone — is what stops **"hey wifi"** from
+counting. The 18 accepted variants and 18 rejected traps live in `tools/test_wake.py`;
+run it if you touch a threshold.
+
+**The wake phrase is never typed:** on waking, recording starts *without* pre-roll,
+precisely so the tail of "hey WISPI" doesn't end up dictated.
+
+And it **only listens at rest**. While recording, transcribing, polishing or paused the
+detector is deaf: it can't hear itself and can't steal cores from the real engine.
 
 ### Touch keyboard
 
@@ -373,6 +418,11 @@ endpoint"* came out as *"Create an endpoint"*.
   (`logging.include_text: false`).
 - The logger never records `vkCode` for keys outside the configured combo.
 - With `local_files_only: true`, WISPI starts and transcribes with no network at all.
+- **The wake word ships off.** It's the only feature that analyses the microphone
+  without you asking for anything, so switching it on has to be your decision, not a
+  surprise. With it on, still not one byte leaves the machine — recognition is local,
+  same as dictation — and **what it hears is never written to any log**, not even what
+  it discards, unless you deliberately set `include_text: true`.
 
 WISPI installs a global keyboard hook, reads the clipboard and injects keystrokes. That
 deserves more than a paragraph: the full threat model, what to verify and in which file,
@@ -432,6 +482,7 @@ wispi/
   winapi.py        ALL ctypes declarations (Win64 bugs are type bugs)
   hotkey.py        WH_KEYBOARD_LL hook + watchdog          ← failure point #1
   audio.py         permanent InputStream + pre-roll ring
+  wake.py          "hey WISPI": segments first, recognizes only then
   asr/base.py      the Protocol that makes the engine swappable
   inject/          Ctrl+V / Shift+Insert / Unicode cascade ← failure point #2
   postprocess/     level 0 (rules + dictionary) and level 1 (Ollama)
@@ -441,6 +492,7 @@ tools/
   make_corpus.py   generates the corpus with Piper (no human voice needed)
   target_window.py target window for testing cross-process injection
   e2e_pipeline.py  the 21 end-to-end tests
+  test_wake.py     36 wake-word cases (matching + segmentation)
 ```
 
 ## The two places this can break

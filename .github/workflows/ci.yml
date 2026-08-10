@@ -59,5 +59,14 @@ jobs:
       - name: Regresion del nivel 0
         run: uv run python tools/test_level0.py
 
+      # Prueba 3: la palabra de activacion. Cabe aqui por la misma razon que el
+      # nivel 0: es texto puro y audio SINTETICO, sin modelo y sin microfono. Lo
+      # que verifica es donde vive el riesgo -que "hey wifi" no cuente como
+      # activacion, y que el segmentador no mande al reconocedor ni el silencio
+      # ni una conversacion seguida-. Que `tiny` oiga "wispi" en una boca real
+      # sigue siendo 🔴 y no se puede probar aqui.
+      - name: Regresion de la palabra de activacion
+        run: uv run python tools/test_wake.py
+
       - name: Compilar todo el arbol
         run: uv run python -m compileall -q wispi tools

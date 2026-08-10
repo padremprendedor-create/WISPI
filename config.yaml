@@ -31,6 +31,68 @@ hotkey:
   slow_callback_ms: 50      # un callback mas lento que esto fuerza re-enganche inmediato
   accept_injected: false    # [SOLO TESTS] aceptar input sintetico (LLKHF_INJECTED)
 
+wake:
+  # "hey WISPI" arranca un dictado en manos libres sin tocar nada. NO sustituye a
+  # Ctrl+Win: es para cuando no tienes las manos en el teclado.
+  #
+  # APAGADA POR DEFECTO A PROPOSITO. Es la unica funcion que analiza el microfono
+  # sin que hayas pedido nada. Todo sigue siendo local -no sale un byte- pero
+  # encenderla tiene que ser una decision tuya.
+  #
+  # LA PRIMERA VEZ necesita el modelo `tiny` en disco. Si no lo tienes, o pones
+  # asr.local_files_only en false una vez para que se descargue (~75 MB), o dejas
+  # que caiga por fallback_chain al `base`/`small` que ya tengas (mas lento pero
+  # funciona). Si no carga ninguno, se avisa en el log y Ctrl+Win sigue igual.
+  enabled: false
+
+  # Formas, no ortografias. El emparejado es DIFUSO porque "wispi" no es una
+  # palabra espanola y el modelo la escribe distinto cada vez (Wispy, Guispi,
+  # Vispi...). Ver `tools/test_wake.py` para las 18 variantes que se aceptan.
+  phrases:
+    - hey wispi
+    - ey wispi
+    - oye wispi
+    - hola wispi
+  name: wispi
+  # Parecido minimo de la frase entera (0-1). Bajalo si no te reconoce.
+  threshold: 0.75
+  # ...y del NOMBRE solo. Este es el que hace el trabajo fino: sin el, "hey wifi"
+  # pasa con 0,80 porque comparte "hey" y "wi". Subirlo cierra falsos positivos;
+  # bajarlo de 0.65 empieza a abrirlos.
+  name_threshold: 0.70
+  max_tokens: 5             # un enunciado mas largo no es una palabra de activacion
+
+  model: tiny               # [REINICIO]
+  # NO los 10 del ASR: esto corre mientras no dictas y no puede pelearse con
+  # Ollama ni con lo que tengas abierto. MEDIDO en esta maquina con `tiny`:
+  # 2 hilos -> 440 ms por candidato, 10 hilos -> 210 ms. El coste es FIJO, no
+  # depende de lo que dure el clip. Subirlo a 4 recorta ~150 ms de la espera
+  # entre que terminas de decir "hey WISPI" y suena el tono. [REINICIO]
+  cpu_threads: 2
+  fallback_chain:           # si `tiny` no esta en disco
+    - {model: base}
+    - {model: small}
+  # Vacio. Sesgar el decoder hacia "WISPI" sube los aciertos pero tambien hace
+  # que lo escupa sobre audio dudoso, o sea mas falsos positivos.
+  initial_prompt: ""
+
+  # QUE SE MANDA AL RECONOCEDOR. Aqui esta el porque de que esto no queme la CPU:
+  # solo se analiza un ENUNCIADO CORTO Y AISLADO -entre min y max de voz, cerrado
+  # por un silencio-, que es la forma exacta de decir "hey WISPI" y callar. Con la
+  # sala en silencio el ASR no se llama ni una vez; una conversacion seguida o la
+  # tele tampoco producen candidatos, porque no hay enunciado aislado.
+  rms_threshold: null       # null = usar audio.silence_threshold
+  min_speech_s: 0.25
+  max_speech_s: 2.0         # mas largo que esto NO es la palabra de activacion
+  end_silence_s: 0.35       # silencio que cierra el enunciado
+  preroll_ms: 200           # para no comerse la 'h' de "hey"
+  cooldown_s: 2.0           # refractario tras un disparo
+
+  # Al despertar. include_preroll SIEMPRE false: el ring lleva el final de "hey
+  # WISPI" y ponerlo delante seria escribir la propia frase de activacion.
+  include_preroll: false
+  start_grace_s: 1.5        # margen para empezar a hablar tras el tono
+
 asr:
   backend: faster-whisper
   # MEDIDO EN UN i9-10850K (10 cores, sin GPU; int8, cpu_threads=10, beam=1):
