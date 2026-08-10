@@ -1,6 +1,6 @@
 # ROADMAP — WISPI
 
-**Última actualización:** 2026-08-10 · **Estado:** v0.2 en uso diario real, repo preparado para open source
+**Última actualización:** 2026-08-10 · **Estado:** v0.2 en uso diario real, **publicado como open source**
 
 El objetivo sigue siendo el de [SPEC.md](SPEC.md): que Wispr Flow se pueda desinstalar sin
 echarlo de menos. Todo lo de aquí se ordena por eso, no por lo interesante que sea.
@@ -38,7 +38,16 @@ echarlo de menos. Todo lo de aquí se ordena por eso, no por lo interesante que 
       puede probar de verdad)
 - [x] Historial aplanado a un commit inicial limpio; el anterior queda en la rama local
       `historial-privado`
-- [ ] **Poner el repo en público** — decisión del founder, no se toca desde aquí
+- [x] **Repo público** desde el 2026-08-10 — github.com/padremprendedor-create/WISPI
+
+A partir de aquí el repositorio lo puede leer cualquiera. Dos consecuencias que
+conviene tener presentes al tocarlo:
+
+- Lo que se empuja ya no se puede retirar del todo: alguien puede haberlo clonado.
+- Los criterios 🔴 de abajo ahora los lee gente de fuera. Están marcados como lo
+  que son —lo que todavía no se ha verificado— y así deben seguir: un criterio que
+  se marca verde para que la lista quede bonita es la forma más rápida de que este
+  documento deje de servir para nada.
 
 ---
 
