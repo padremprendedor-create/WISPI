@@ -1,0 +1,124 @@
+# Configuracion de WISPI. Todos los valores tienen default en wispi/config.py;
+# aqui solo hace falta lo que quieras cambiar. Se recarga en caliente al guardar
+# (poll de mtime cada 2 s) salvo las claves marcadas [REINICIO].
+
+audio:
+  sample_rate: 16000        # requerido por whisper; no cambiar
+  input_device: null        # null = micro por defecto; o indice/nombre de sounddevice
+  block_ms: 30              # tamano del bloque del callback de PortAudio
+  preroll_ms: 300           # ring que se vuelca al empezar a grabar (no comerse la 1a silaba)
+  tail_ms: 200              # cola tras el key-up (no cortar la ultima silaba)
+  max_duration_s: 60.0      # tope duro de un dictado
+  min_duration_s: 0.35      # por debajo de esto se descarta sin llamar al ASR
+  # RMS normalizado, medido con un headset USB de diadema a distancia normal.
+  # ES LA PERILLA QUE MAS SE TOCA: subela si tu sala es ruidosa y se te cuelan
+  # dictados vacios; bajala si hablas bajito y WISPI descarta dictados buenos.
+  # `uv run python -m wispi.selftest --audio` te dice el RMS de tu voz.
+  silence_threshold: 0.012
+  silence_duration_s: 1.2   # solo aplica en modo manos libres
+  start_grace_s: 0.3
+
+hotkey:
+  # Ctrl+Win: es el combo de Wispr Flow y esta limpio en teclado espanol.
+  # OJO: NUNCA usar Right Alt (0xA5) -> es AltGr y genera @ # ~ [ ] \.
+  # Tampoco Ctrl+Alt+<tecla>, que Windows trata como AltGr+<tecla>.
+  combo: [ctrl, win]
+  double_tap_ms: 400        # doble-toque -> modo manos libres
+  tap_max_ms: 250           # una pulsacion mas larga que esto NO es un toque: es PTT
+  cancel_key: esc
+  suppress_start_menu: true # emite VK 0xE8 intermedio para que Win no abra Inicio
+  rehook_interval_s: 300    # watchdog: reinstalar el hook cada N segundos
+  slow_callback_ms: 50      # un callback mas lento que esto fuerza re-enganche inmediato
+  accept_injected: false    # [SOLO TESTS] aceptar input sintetico (LLKHF_INJECTED)
+
+asr:
+  backend: faster-whisper
+  # MEDIDO EN UN i9-10850K (10 cores, sin GPU; int8, cpu_threads=10, beam=1):
+  #   large-v3 -> 6.26 s de piso POR DICTADO   small -> 1.24 s   base -> 0.36 s
+  # El costo es FIJO, no proporcional al audio: whisper rellena a una ventana de
+  # 30 s y corre una pasada de encoder pase lo que pase. Por eso large-v3-turbo y
+  # distil-large-v3 tampoco sirven: recortan el decoder, no el encoder.
+  model: small
+  device: cpu
+  compute_type: int8
+  cpu_threads: 10           # PON AQUI TUS CORES FISICOS. Contar los logicos
+                            # (con HyperThreading) empeora el GEMM int8.
+  beam_size: 1              # greedy; beam 5 multiplica el decoder x3-5
+  language: es
+  without_timestamps: true
+  condition_on_previous_text: false   # evita bucles de repeticion
+  temperature: 0.0
+  vad_filter: true          # Silero v6, viene dentro de faster_whisper/assets/
+  no_speech_threshold: 0.6
+  # true = no toca la red NUNCA. Ponlo en false la PRIMERA vez, para que se
+  # descargue el modelo, y devuelvelo a true cuando ya este en disco.
+  local_files_only: true
+  # null = cache por defecto de Hugging Face (~/.cache/huggingface/hub).
+  # Solo pon una ruta si guardas los modelos en otro disco.
+  download_root: null
+  fallback_chain:
+    - {backend: faster-whisper, model: small, device: cpu, compute_type: int8}
+    - {backend: faster-whisper, model: base, device: cpu, compute_type: int8}
+
+postprocess:
+  enabled: true
+  strip_fillers: true
+  fix_spacing: true
+  capitalize: true
+  apply_dictionary: true
+  use_initial_prompt: true  # sesga el decoder con la jerga: PREVIENE el error
+  # Prefijo que se antepone a `prompt_prose` de dictionary.yaml. VACIO a proposito:
+  # una frase meta del tipo "Transcripcion tecnica en espanol con terminos en ingles"
+  # no es lenguaje natural, y el decoder -que continua el ESTILO de lo que le des-
+  # se contagia. Con ella puesta, "Crea un endpoint" salia como "Create an endpoint".
+  initial_prompt_style: ""
+
+llm:
+  enabled: true
+  provider: ollama
+  base_url: "http://127.0.0.1:11434"
+  model: "llama3.1:8b"
+  min_words: 25             # por debajo de esto NO se llama al LLM
+  timeout_s: 3.0
+  temperature: 0.0
+  keep_alive: -1            # modelo residente: sin esto el 1er dictado paga 3-5 s
+  max_len_delta: 0.4        # descartar la salida si difiere +-40% en longitud
+
+injection:
+  route: auto               # auto | ctrl_v | shift_insert | unicode | none
+  restore_clipboard: true
+  restore_delay_ms: 400
+  settle_ms: 25             # espera tras poner el portapapeles antes de mandar Ctrl+V
+  modifier_release_timeout_ms: 200
+  never_send_enter: true    # NUNCA inyectar \n final: auto-enviaria el prompt
+  unicode_chunk: 20         # caracteres por lote en la ruta unicode
+  terminal_apps:            # aqui Ctrl+V no funciona -> Shift+Insert
+    - windowsterminal.exe
+    - cmd.exe
+    - powershell.exe
+    - pwsh.exe
+    - conhost.exe
+    - wsl.exe
+    - alacritty.exe
+    - wezterm-gui.exe
+  no_patch_apps:            # nunca aplicar el parche optimista aqui
+    - windowsterminal.exe
+    - cmd.exe
+    - powershell.exe
+    - pwsh.exe
+    - conhost.exe
+    - wsl.exe
+  patch_max_wait_ms: 1500   # pasado esto se abandona el parche y queda el crudo
+  terminal_llm_wait_ms: 700 # en terminal se espera acotado y se escribe UNA vez
+
+logging:
+  level: INFO
+  include_text: false       # NUNCA guardar el transcrito. Solo tiempos y longitudes.
+  latency_jsonl: true
+  max_bytes: 5242880
+  backup_count: 3
+
+ui:
+  chime_enabled: true
+  chime_volume: 0.15
+  tray_enabled: true

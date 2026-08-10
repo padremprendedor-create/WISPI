@@ -1,0 +1,63 @@
+# CI de WISPI.
+#
+# QUE PUEDE PROBAR UN RUNNER Y QUE NO
+#   Un runner de GitHub no tiene microfono, ni sesion interactiva, ni ventanas
+#   donde inyectar texto. Todo lo que de verdad puede romper WISPI —el hook de
+#   teclado, la captura de audio, la inyeccion— es INVERIFICABLE aqui, y montar
+#   un CI que finja lo contrario seria peor que no tenerlo.
+#
+#   Asi que este workflow prueba las dos unicas cosas reales que caben:
+#     1. Que `uv sync` instala el proyecto en una maquina limpia. Suena a poco
+#        hasta que recuerdas que este stack (ctranslate2 + onnxruntime + numpy)
+#        rompe entre versiones menores, y que el lockfile es la unica garantia.
+#     2. Que el nivel 0 y el diccionario siguen dando 21/21. Es la red de
+#        regresion del unico componente que es texto puro: sin modelo, sin
+#        audio, sin ventanas.
+#
+#   El resto (C5.1 latencia, C7.1 jerga, C4 inyeccion) exige el corpus y una
+#   maquina real: `tools/e2e_pipeline.py` en tu Windows. Ver CONTRIBUTING.md.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: nivel 0 + diccionario (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      # Prueba 1: el lockfile instala en una maquina limpia.
+      - name: uv sync
+        run: uv sync --frozen
+
+      # Criterio C1.2 del SPEC: los tres paquetes que mas suelen romper importan.
+      - name: Importar las dependencias criticas
+        run: uv run python -c "import faster_whisper, sounddevice, pystray, yaml; print('ok')"
+
+      # Que el YAML que se edita a mano no se haya quedado roto.
+      - name: Validar config.yaml y dictionary.yaml
+        run: uv run python -c "import yaml,io; [yaml.safe_load(io.open(f,encoding='utf-8')) for f in ['config.yaml','dictionary.yaml','dictionary.personal.example.yaml']]; print('ok')"
+
+      # Prueba 2: la regresion del nivel 0. Devuelve 1 si algun caso falla.
+      #
+      # OJO: la linea de latencia (C7.3) es INFORMATIVA aqui y no tumba el build.
+      # Un runner compartido no da un p99 comparable con una maquina de verdad, y
+      # un CI que falla por ruido de la infraestructura se acaba ignorando.
+      - name: Regresion del nivel 0
+        run: uv run python tools/test_level0.py
+
+      - name: Compilar todo el arbol
+        run: uv run python -m compileall -q wispi tools

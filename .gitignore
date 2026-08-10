@@ -1,0 +1,18 @@
+.venv/
+.venv-gpu/
+__pycache__/
+*.pyc
+logs/
+bench/corpus/
+bench/out/
+dictionary_learned.yaml
+*.wav.tmp
+.pytest_cache/
+
+# Overrides locales: los escribe la ventana de configuracion y son de TU maquina
+# (posicion del boton flotante, micro elegido, umbrales calibrados).
+config.local.yaml
+
+# Voces de Piper para regenerar el corpus. Son .onnx de decenas de MB y se
+# descargan aparte; ver tools/make_corpus.py.
+models/

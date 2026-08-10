@@ -1,0 +1,41 @@
+[project]
+name = "wispi"
+version = "0.1.0"
+description = "Dictado por voz local, personal y offline para Windows. Reemplazo de Wispr Flow."
+requires-python = ">=3.11,<3.13"
+license = "MIT"
+readme = "README.md"
+
+# Versiones CLAVADAS a proposito, no rangos. Este stack (ctranslate2 + onnxruntime
+# + numpy) rompe con facilidad entre versiones menores, y una app de dictado que
+# arranca sin transcribir es peor que una que no arranca. `uv.lock` va versionado.
+dependencies = [
+    "faster-whisper==1.2.1",   # trae silero_vad_v6.onnx en assets/
+    "ctranslate2==4.8.1",      # motor de inferencia del ASR
+    "onnxruntime==1.27.0",     # requerido por vad_filter=True
+    "numpy==2.4.3",
+    "sounddevice==0.5.5",      # captura de microfono (PortAudio)
+    "PyYAML==6.0.3",
+    "httpx==0.28.1",           # cliente sincrono contra Ollama
+    "pystray>=0.19.5",         # icono de bandeja
+    "pillow>=11.0",            # requerido por pystray para los iconos
+]
+
+[project.urls]
+Homepage = "https://github.com/padremprendedor-create/WISPI"
+Issues = "https://github.com/padremprendedor-create/WISPI/issues"
+
+[project.optional-dependencies]
+# Solo hace falta si mueves el ASR a GPU (ver "Escalera de migracion" en el README).
+# cuDNN 9, NO 8: CTranslate2 4.8 exige la 9. Instalalo en un venv APARTE (.venv-gpu):
+# si el CUDA queda a medias, el modelo carga y revienta al transcribir, y te quedas
+# sin dictado en el venv bueno.
+gpu = [
+    "nvidia-cublas-cu12",
+    "nvidia-cudnn-cu12>=9,<10",
+]
+
+[tool.uv]
+# WISPI es una app, no una libreria: no hace falta instalarla como paquete.
+# Se ejecuta con `uv run python -m wispi` desde la raiz del repo.
+package = false

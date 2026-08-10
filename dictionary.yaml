@@ -1,0 +1,265 @@
+# Diccionario de jerga de WISPI.
+#
+# ESTE FICHERO ES TUYO. Viene con jerga tecnica de uso general (Supabase, commit,
+# n8n, RLS...), que es lo que le sirve a cualquiera. Los NOMBRES PROPIOS de tus
+# proyectos, tus clientes y tu equipo no estan aqui porque nadie mas los dice:
+# se anaden a mano. En `dictionary.personal.example.yaml` tienes un ejemplo
+# completo de como hacerlo y de las trampas que tiene.
+#
+# POR QUE existe: Whisper-es escribe fonetica espanola. "Supabase" le sale
+# "supa base", "commit" le sale "comit", "n8n" le sale "n ocho n". El diccionario
+# ataca eso por los DOS lados (criterio C7.5 del SPEC):
+#   1. PREVENCION: los `canonical` se cosen en el `initial_prompt` del decoder, que
+#      sesga la busqueda antes de que el error ocurra.
+#   2. CURA: los `variants` se compilan en un unico regex que se aplica al texto ya
+#      transcrito.
+#
+# EDITAR EN CALIENTE: guardar este fichero surte efecto en < 3 s, sin reiniciar
+# (criterio C7.4). Si el YAML queda roto, WISPI se queda con la version anterior y
+# lo avisa por log; no se cae.
+#
+# ESQUEMA
+#   terms:
+#     - canonical: "Supabase"          # como debe quedar escrito
+#       variants: ["supa base", ...]   # como lo destroza Whisper
+#       keep_case: true                # opcional: prohibe que se capitalice a
+#                                      # principio de frase ("npm", no "Npm")
+#
+# REGLAS QUE ME AUTOIMPUSE AL ESCRIBIRLO (leelas antes de anadir variantes):
+#
+#   a) TODO EN ASCII Y EN MINUSCULAS. El matcher pliega tildes y no distingue
+#      mayusculas, asi que "supabeis" ya cubre "Supabeis" y "migracion" ya cubre
+#      "migracion" con tilde. Escribir tildes aqui no anade nada y complica el encoding.
+#
+#   b) NINGUNA VARIANTE ES UNA PALABRA ESPANOLA CORRIENTE. Un falso positivo
+#      (comerse una palabra buena) es mucho peor que un falso negativo (dejar un
+#      "comit" sin arreglar), porque el usuario no ve venir el primero. Por eso
+#      quedaron FUERA a proposito, aunque Whisper las produzca:
+#        "comi"  -> "commit"   ("ayer comi pizza")
+#        "pus"   -> "push"     (pus, el liquido)
+#        "pronto"-> "prompt"
+#        "o llama" -> "Ollama" ("el usuario pulsa o llama")
+#        "uve"   -> "uv"       (el nombre de la letra V)
+#        "merch" -> "merge"    (merchandising)
+#
+#   c) DOS VARIANTES SI SON PALABRAS ESPANOLAS Y ENTRAN IGUAL, porque el termino
+#      tecnico es lo que se dice a diario y el homofono casi nunca:
+#        "remocion"  -> Remotion    (remocion = accion de remover)
+#        "obsidiana" -> Obsidian    (la roca)
+#      Si algun dia molesta, se borra la variante de este fichero y listo.
+#      La decision depende de TU vocabulario: si trabajas en construccion,
+#      "remocion" es una palabra que dices de verdad y esa variante sobra.
+#
+#   d) NADA DE PLURALES NI DE FORMAS CONJUGADAS. "endpoints" -> "endpoint" perderia
+#      la s; "pushear" -> "push" romperia la frase. El regex reemplaza literal, no
+#      lematiza.
+
+# ---------------------------------------------------------------------------
+# SEMILLA DEL DECODER (initial_prompt de Whisper)
+#
+# EL FORMATO IMPORTA MAS QUE EL CONTENIDO. Whisper trata esto como TEXTO PREVIO y
+# continua su ESTILO, no solo su vocabulario. Con una lista "A, B, C" el decoder
+# empieza a devolver listas y TRUNCA la transcripcion: una frase de 13 palabras
+# salia como "workflow, n8n, webhook, prisman,".
+#
+# Medido sobre el corpus (small int8, beam=1, 10 clips, 2026-08-09):
+#     sin prompt      retencion  99%   jerga 17/31   p50 1494 ms
+#     lista           retencion  77%   jerga 27/31   p50 1566 ms   <- destrozaba
+#     prosa (esta)    retencion 100%   jerga 30/31   p50 1534 ms   <- elegida
+#     prosa + beam5   retencion 100%   jerga 31/31   p50 1893 ms   <- +359 ms por 1 termino
+#
+# REGLAS SI LA EDITAS:
+#   - Frases espanolas corrientes. Nada de listas, vinetas ni dos puntos.
+#   - Mete cada termino en el contexto sintactico en que de verdad lo dices.
+#   - Tope 224 tokens (~780 caracteres). Si te pasas, se recorta por frase y se avisa.
+#   - Si borras esta clave, se genera prosa automatica desde los `canonical`.
+#     Funciona, pero peor: la escrita a mano gana porque tiene contexto real.
+#   - AQUI ES DONDE MAS SE NOTAN TUS NOMBRES PROPIOS. Anadir una frase con los
+#     nombres de tus proyectos ("Trabajo en Acme punto ai y en el portal de
+#     Nimbus") sesga el decoder ANTES de que se equivoque, que es mucho mejor
+#     que arreglarlo despues con un regex.
+prompt_prose: >
+  Estamos trabajando en un proyecto con Next.js y Supabase, con RLS activado en
+  Postgres y Prisma. Hago commit y push, y luego deploy en Vercel desde GitHub.
+  Uso Claude Code, Ollama y n8n para los webhooks del backend, shadcn y Tailwind
+  en el frontend, TypeScript y JSON en la API. Escribo las notas en Obsidian y
+  monto los videos con Remotion y ffmpeg desde Windows Terminal. Antes de abrir
+  el pull request repaso la migracion de SQL y el endpoint que falla.
+
+terms:
+
+  # ---- los 18 terminos que mide el criterio C7.1 ---------------------------
+  # (los 16 de aqui abajo, mas Obsidian y ffmpeg, mas abajo en el fichero)
+
+  - canonical: "Supabase"
+    variants: ["supabase", "supa base", "supa-base", "super base", "supabeis",
+               "supa beis", "supabais", "supa vase", "supa base", "sopabase",
+               "sopa base", "supabas", "supabeys", "su pabase"]
+
+  - canonical: "Vercel"
+    variants: ["vercel", "versel", "ver cel", "ver sel", "verssel", "bercel",
+               "bersel", "ber sel", "vercell", "vercer", "vervel"]
+
+  - canonical: "Next.js"
+    keep_case: true
+    variants: ["next.js", "next js", "nextjs", "next punto js", "nexjs", "nex js",
+               "next punto jota ese", "next punto jota s", "necs js", "next yes",
+               "nekst js", "next js", "nextyes"]
+
+  - canonical: "Claude Code"
+    variants: ["claude code", "cloud code", "cloud cod", "clod code", "clode code",
+               "clode cod", "claud code", "claude cod", "cloude code", "claudio code",
+               "clau code", "clot code", "cloudcode"]
+
+  - canonical: "n8n"
+    keep_case: true
+    variants: ["n8n", "n ocho n", "ene ocho ene", "en ocho en", "n8 n", "ene 8 ene",
+               "n ocho ene", "ene ocho n", "enocho ene"]
+
+  - canonical: "RLS"
+    variants: ["rls", "erre ele ese", "r l s", "arre ele ese", "erre eleese",
+               "erreelese", "rlas", "erlese", "erre ele s"]
+
+  - canonical: "commit"
+    variants: ["commit", "comit", "come it", "komit", "co mit", "comits", "comitt",
+               "commet", "commint", "comip"]
+
+  - canonical: "push"
+    variants: ["push", "puch", "pusch", "pushh", "pusj", "puush", "puchh"]
+
+  - canonical: "deploy"
+    variants: ["deploy", "deploi", "de ploy", "de ploi", "diploi", "diploy",
+               "deploid", "deplo", "deploy y"]
+
+  - canonical: "prompt"
+    variants: ["prompt", "promt", "promp", "promtt", "pront", "promb", "pronp",
+               "prompd"]
+
+  - canonical: "endpoint"
+    variants: ["endpoint", "end point", "en point", "endpoin", "and point",
+               "end poin", "endpoind", "en poin", "endpoynt"]
+
+  - canonical: "Prisma"
+    variants: ["prisma", "prizma", "prisma orm", "prismaorm", "priisma"]
+
+  - canonical: "Tailwind"
+    variants: ["tailwind", "tail wind", "teilwind", "teil wind", "tailguind",
+               "tail guind", "tailwin", "taliwind", "tel wind", "tailwind css"]
+
+  - canonical: "shadcn"
+    keep_case: true
+    variants: ["shadcn", "shad cn", "chadcn", "chad cn", "shadecn", "shad ce ene",
+               "shad c n", "chad ce ene", "shatcn", "sadcn"]
+
+  - canonical: "Remotion"
+    variants: ["remotion", "remocion", "re motion", "rimotion", "remoshion",
+               "remoushion", "remotion js", "remotin", "rimotin", "remoutin"]
+
+  - canonical: "Ollama"
+    variants: ["ollama", "olama", "oyama", "olyama", "oh lama", "ollamma", "oiama",
+               "hollama"]
+
+  # ---- AQUI VAN TUS NOMBRES PROPIOS ----------------------------------------
+  #
+  # Proyectos, clientes, productos, companeros de equipo. Es la parte que mas
+  # valor da y la unica que nadie puede escribir por ti. Copia el formato de
+  # `dictionary.personal.example.yaml`, que ademas explica como sacar las
+  # variantes en vez de inventarlas.
+
+  - canonical: "WISPI"
+    keep_case: true
+    variants: ["wispi", "wispy", "guispi", "uispi", "wispis", "wis pi", "guis pi",
+               "wispii"]
+
+  # ---- herramientas y stack ------------------------------------------------
+
+  - canonical: "Obsidian"
+    variants: ["obsidian", "obsidiana", "obsidien", "obsidian md", "obsidianmd",
+               "ossidian", "osidian", "obcidian", "obsidiam", "obsidean"]
+
+  - canonical: "TypeScript"
+    variants: ["typescript", "type script", "taipscript", "taip script",
+               "taipescrip", "tipo script", "taipscrip", "taip escrip"]
+
+  - canonical: "React"
+    variants: ["react", "riact", "ri act", "reac", "rihact", "reack"]
+
+  - canonical: "Python"
+    variants: ["python", "paiton", "pyton", "pai ton", "paizon", "phyton", "paithon",
+               "paiton3"]
+
+  - canonical: "Whisper"
+    variants: ["whisper", "wisper", "guisper", "uisper", "wisqer", "wispper",
+               "guis per"]
+
+  - canonical: "Postgres"
+    variants: ["postgres", "posgres", "post gres", "pos gres", "postgrez",
+               "posgress", "postgrees"]
+
+  - canonical: "localhost"
+    keep_case: true
+    variants: ["localhost", "local host", "localjost", "local jost", "localgost"]
+
+  - canonical: "npm"
+    keep_case: true
+    variants: ["npm", "ene pe eme", "n p m", "enepeeme", "ene pe em"]
+
+  - canonical: "uv"
+    keep_case: true
+    variants: ["u v"]
+
+  - canonical: "ffmpeg"
+    keep_case: true
+    variants: ["ffmpeg", "ff mpeg", "efe efe empeg", "efempeg", "f f m peg",
+               "efe efe em peg", "ffmpg"]
+
+  - canonical: "GitHub"
+    variants: ["github", "git hub", "guitjab", "guit hab", "gitjab", "yitjab",
+               "git jab", "guit jab", "guithub"]
+
+  - canonical: "Windows Terminal"
+    variants: ["windows terminal", "guindous terminal", "windos terminal",
+               "window terminal", "guindows terminal"]
+
+  # ---- vocabulario de git y del oficio -------------------------------------
+
+  - canonical: "repo"
+    keep_case: true
+    variants: ["repo", "rrepo", "repoh"]
+
+  - canonical: "branch"
+    variants: ["branch", "brench", "bran ch", "branchi", "brranch", "brantch"]
+
+  - canonical: "merge"
+    variants: ["merge", "mergue", "mer ge", "merye", "merch e"]
+
+  - canonical: "pull request"
+    variants: ["pull request", "pul request", "pool request", "pull rikuest",
+               "pul rikuest", "pullrequest", "pul rekuest", "pull requet"]
+
+  - canonical: "backend"
+    variants: ["backend", "back end", "bakend", "bac end", "back-end", "bakend",
+               "bak end"]
+
+  - canonical: "frontend"
+    variants: ["frontend", "front end", "fron tend", "front-end", "frontend",
+               "fron end", "frontent"]
+
+  - canonical: "API"
+    variants: ["api", "a p i", "ei pi ai", "eipiai", "a pe i"]
+
+  - canonical: "JSON"
+    variants: ["json", "yeison", "yason", "jeison", "yeson", "llason", "yeisson",
+               "ye son"]
+
+  - canonical: "SQL"
+    variants: ["sql", "ese cu ele", "esecuele", "sequel", "ese cu el", "s q l"]
+
+  - canonical: "webhook"
+    variants: ["webhook", "web hook", "guebhuk", "web huk", "webjuk", "uebhook",
+               "gueb juk", "web juk"]
+
+  # El unico canonico que necesita una tilde. Va con escape \u de YAML para que este
+  # fichero siga siendo ASCII puro y no dependa del codepage de la consola.
+  - canonical: "migraci\u00f3n"
+    variants: ["migracion"]

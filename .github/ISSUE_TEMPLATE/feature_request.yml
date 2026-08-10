@@ -1,0 +1,39 @@
+name: Propuesta
+description: Una idea para WISPI
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Antes de escribir: WISPI tiene un objetivo escrito en
+        [SPEC.md](../blob/main/SPEC.md), y su §2 lista lo que quedó **fuera de alcance**
+        a propósito. Si tu idea está ahí, ábrela igual, pero cuenta por qué debería
+        cambiar la decisión.
+
+  - type: textarea
+    id: problema
+    attributes:
+      label: Qué problema tienes
+      description: |
+        El problema, no la solución. "Tengo que soltar el ratón para pulsar Enter"
+        es más útil que "añade un botón de Enter": puede que la mejor solución no
+        sea la que traes pensada.
+    validations:
+      required: true
+
+  - type: textarea
+    id: propuesta
+    attributes:
+      label: Qué propones
+    validations:
+      required: true
+
+  - type: textarea
+    id: coste
+    attributes:
+      label: Qué cuesta
+      description: |
+        ¿Añade latencia al dictado? ¿Una dependencia nueva? ¿Una tecla más que
+        aprender? Un dictado 100 ms más lento molesta todos los días.
+    validations:
+      required: false

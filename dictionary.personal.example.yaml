@@ -1,0 +1,115 @@
+# EJEMPLO — tus nombres propios en el diccionario de WISPI
+#
+# Este fichero NO SE CARGA. Es una plantilla para copiar y pegar dentro de
+# `dictionary.yaml`, en la seccion "AQUI VAN TUS NOMBRES PROPIOS".
+#
+# POR QUE ESTA PARTE NO VIENE HECHA
+# La jerga tecnica general (Supabase, commit, n8n, RLS) le sirve a cualquiera y
+# por eso viaja en el repo. Los nombres de TUS proyectos y TUS clientes no los
+# dice nadie mas, y son justo los que Whisper mas destroza: no estaban en su
+# corpus de entrenamiento, asi que los reconstruye por fonetica espanola.
+#
+# Es tambien donde el diccionario mas se nota. "Supabase" a veces sale bien solo;
+# el nombre de tu empresa no sale bien NUNCA hasta que lo metes aqui.
+#
+# ---------------------------------------------------------------------------
+# COMO SACAR LAS VARIANTES (no las inventes: mideelas)
+# ---------------------------------------------------------------------------
+#
+#   1. Abre el Bloc de notas y dicta el nombre DIEZ veces, en frases distintas y
+#      a velocidad normal. No lo pronuncies con cuidado: pronuncialo como cuando
+#      trabajas, que es lo que WISPI tiene que aguantar.
+#   2. Copia literalmente lo que salio escrito. Eso son tus variantes reales.
+#   3. Pasalas a minusculas y sin tildes antes de pegarlas aqui (el matcher
+#      pliega tildes y mayusculas; escribirlas no anade nada).
+#   4. Guarda `dictionary.yaml`. Surte efecto en menos de 3 s, sin reiniciar.
+#      Vuelve a dictar las mismas frases y comprueba.
+#
+# Diez repeticiones suelen dar entre tres y seis formas distintas. Las que no
+# aparezcan, no las anadas "por si acaso": cada variante es superficie para un
+# falso positivo.
+#
+# ---------------------------------------------------------------------------
+# LA REGLA QUE NO SE SALTA
+# ---------------------------------------------------------------------------
+#
+# NINGUNA VARIANTE PUEDE SER UNA PALABRA ESPANOLA CORRIENTE.
+#
+# Un falso negativo (que se quede "acme ei ai" sin arreglar) lo ves y lo corriges.
+# Un falso positivo no lo ves venir y te corrompe frases buenas durante semanas: si tu
+# producto se llama "Nube" y metes "nube" como variante, cada vez que hables del tiempo
+# o de la nube de AWS te va a escribir el nombre de tu producto.
+#
+# Si tu marca se llama como una palabra comun, NO metas esa palabra como variante:
+# deja solo las deformaciones inequivocas y apoyate en `prompt_prose`, que sesga
+# el decoder sin poder romper nada.
+#
+# ---------------------------------------------------------------------------
+# 1) PEGA ESTO EN dictionary.yaml, DENTRO DE `terms:`
+# ---------------------------------------------------------------------------
+
+terms:
+
+  # Un producto con dominio .ai — el patron mas dificil, porque Whisper-es parte
+  # el nombre y deletrea el dominio de seis maneras distintas.
+  - canonical: "Acme.ai"
+    keep_case: true
+    variants: ["acme.ai", "acme ai", "acme punto ai", "acme punto a i",
+               "acmei", "acme ia", "acme punto ia", "acme ei ai",
+               "acme a i", "acme punto i a"]
+    # OJO: "acme" a secas NO esta en la lista. Si lo metieras, cualquier mencion
+    # a la empresa ("trabajo en Acme") se convertiria en "Acme.ai", que es otra
+    # cosa. Las variantes cubren el dominio, no el nombre suelto.
+
+  # Un nombre inventado que Whisper reparte en silabas.
+  - canonical: "Nimbus"
+    variants: ["nimbus", "nim bus", "nimbuss", "nimbos", "ninbus", "nimvus"]
+
+  # Razon social de dos palabras: la primera casi siempre sale bien y la segunda
+  # es la que se rompe. Se registra la expresion COMPLETA, no palabra por palabra.
+  - canonical: "Constructora Nimbus"
+    variants: ["constructora nimbus", "constructora nim bus",
+               "constructora nimbos", "construtora nimbus"]
+
+  # Siglas internas. Se deletrean, asi que las variantes son las letras escritas
+  # como suenan en espanol.
+  - canonical: "PMO"
+    keep_case: true
+    variants: ["pe eme o", "pe em o", "p m o", "peemeo"]
+
+  # Nombre de persona que dices a diario en dictados. Mismo criterio: solo si la
+  # forma incorrecta no es una palabra comun.
+  - canonical: "Yolanda"
+    variants: ["yolanda", "llolanda", "yolan da", "iolanda"]
+
+# ---------------------------------------------------------------------------
+# 2) Y ANADE UNA FRASE A `prompt_prose` EN dictionary.yaml
+# ---------------------------------------------------------------------------
+#
+# `prompt_prose` es la semilla que se le pasa al decoder ANTES de transcribir.
+# Es prevencion, no cura: sesga la busqueda para que el error no llegue a ocurrir.
+# En la practica es mas efectiva que el regex, y no puede provocar falsos
+# positivos porque no reescribe nada.
+#
+# REGLAS AL EDITARLA (importan mas de lo que parece — ver README):
+#   - PROSA ESPANOLA CORRIENTE. Nada de listas ni de "A, B, C": Whisper continua
+#     el ESTILO de lo que le des, y con una lista empieza a devolver listas y
+#     trunca la transcripcion.
+#   - Mete cada nombre en el contexto sintactico en que de verdad lo dices.
+#   - Tope de 224 tokens (~780 caracteres) en total. Si te pasas, WISPI recorta
+#     por frase y lo avisa por log.
+#
+# Frase de ejemplo para pegar al final de `prompt_prose`:
+#
+#     Los proyectos son Acme punto ai y el portal de Constructora Nimbus, y la
+#     PMO los revisa con Yolanda cada lunes.
+#
+# ---------------------------------------------------------------------------
+# 3) COMPRUEBA QUE NO ROMPISTE NADA
+# ---------------------------------------------------------------------------
+#
+#     uv run python tools/test_level0.py     # regresion de reglas, sin voz
+#     uv run python tools/e2e_pipeline.py    # pipeline completo sobre el corpus
+#
+# Si anadiste una variante que era una palabra corriente, `test_level0.py` es
+# donde lo vas a ver.

@@ -1,0 +1,151 @@
+# Corpus de referencia de WISPI. Generado por tools/make_corpus.py con Piper.
+# NO es voz humana real: sirve para regresiones y latencia, no para dar por
+# bueno el WER ni cerrar los criterios que el SPEC marca como HUMANO.
+clips:
+  - id: jerga01
+    file: jerga01.wav
+    text: "Crea un endpoint en Next.js que consulte Supabase con RLS activado y haz commit."
+    tags: [jerga, largo]
+    duration_s: 5.91
+    n_words: 14
+    rms: 0.12711
+  - id: jerga02
+    file: jerga02.wav
+    text: "Haz push a la rama y deploy en Vercel cuando pase el build."
+    tags: [jerga, corto]
+    duration_s: 3.658
+    n_words: 13
+    rms: 0.15826
+  - id: jerga03
+    file: jerga03.wav
+    text: "El workflow de n8n manda el webhook al backend de Prisma en Postgres."
+    tags: [jerga, corto]
+    duration_s: 4.471
+    n_words: 13
+    rms: 0.16974
+  - id: jerga04
+    file: jerga04.wav
+    text: "Instala shadcn y Tailwind en el frontend, y revisa el prompt de Claude Code."
+    tags: [jerga, corto]
+    duration_s: 4.935
+    n_words: 14
+    rms: 0.11333
+  - id: jerga05
+    file: jerga05.wav
+    text: "Ollama corre en localhost y Remotion renderiza el video final."
+    tags: [jerga, corto]
+    duration_s: 4.088
+    n_words: 10
+    rms: 0.13495
+  - id: jerga06
+    file: jerga06.wav
+    text: "Sube el repo nuevo a GitHub y abre un pull request desde la branch."
+    tags: [jerga, corto]
+    duration_s: 4.296
+    n_words: 14
+    rms: 0.18037
+  - id: jerga07
+    file: jerga07.wav
+    text: "Abre Obsidian y apunta la migracion de SQL que falta en Postgres."
+    tags: [jerga, corto]
+    duration_s: 4.622
+    n_words: 12
+    rms: 0.12381
+  - id: jerga08
+    file: jerga08.wav
+    text: "Convierte el video con ffmpeg y devuelve el JSON de la API en TypeScript."
+    tags: [jerga, corto]
+    duration_s: 5.19
+    n_words: 14
+    rms: 0.14157
+  - id: muletilla01
+    file: muletilla01.wav
+    text: "Eh, bueno, o sea, lo que quiero es, este, que el deploy salga bien, sabes."
+    tags: [muletilla, corto]
+    duration_s: 5.365
+    n_words: 15
+    rms: 0.12464
+  - id: muletilla02
+    file: muletilla02.wav
+    text: "Pues digamos que el endpoint, o sea, no responde, eh, cuando hay mucha carga."
+    tags: [muletilla, corto]
+    duration_s: 5.074
+    n_words: 14
+    rms: 0.12704
+  - id: trampa01
+    file: trampa01.wav
+    text: "Este endpoint devuelve un error quinientos y este otro funciona bien."
+    tags: [muletilla, trampa, corto]
+    duration_s: 4.807
+    n_words: 11
+    rms: 0.16075
+  - id: trampa02
+    file: trampa02.wav
+    text: "Bueno es el adjetivo correcto y pues no siempre es muletilla."
+    tags: [muletilla, trampa, corto]
+    duration_s: 4.134
+    n_words: 11
+    rms: 0.12215
+  - id: largo01
+    file: largo01.wav
+    text: "Necesito que revises el flujo completo de registro, desde que el usuario entra por la pagina hasta que recibe el correo de confirmacion, y me digas en que paso se esta perdiendo la informacion del formulario porque llevamos tres dias con reportes raros."
+    tags: [largo]
+    duration_s: 14.2
+    n_words: 43
+    rms: 0.11849
+  - id: largo02
+    file: largo02.wav
+    text: "Eh, quiero que, o sea, montes un cron que cada manana revise los leads sin responder, este, y me mande un resumen al Telegram, pues, con los que llevan mas de veinticuatro horas esperando, sabes, para no dejar a nadie colgado."
+    tags: [largo, muletilla]
+    duration_s: 13.062
+    n_words: 41
+    rms: 0.14421
+  - id: corto01
+    file: corto01.wav
+    text: "Abre el archivo de configuracion."
+    tags: [corto]
+    duration_s: 2.439
+    n_words: 5
+    rms: 0.11529
+  - id: corto02
+    file: corto02.wav
+    text: "Guarda los cambios y cierra."
+    tags: [corto]
+    duration_s: 2.346
+    n_words: 5
+    rms: 0.12092
+  - id: pregunta01
+    file: pregunta01.wav
+    text: "Cual es la diferencia entre una migracion de base de datos y un seed, y cuando conviene usar cada una en un proyecto que ya esta en produccion con clientes reales?"
+    tags: [largo, pregunta]
+    duration_s: 9.219
+    n_words: 31
+    rms: 0.08708
+  - id: numeros01
+    file: numeros01.wav
+    text: "El servidor devolvio un cuatrocientos cuatro en el puerto tres mil, revisa el log."
+    tags: [corto]
+    duration_s: 5.167
+    n_words: 14
+    rms: 0.15647
+  - id: silencio01
+    file: silencio01.wav
+    text: ""
+    tags: [silencio]
+    duration_s: 5.0
+    n_words: 0
+    rms: 0.0
+  - id: silencio02
+    file: silencio02.wav
+    text: ""
+    tags: [silencio]
+    duration_s: 5.0
+    n_words: 0
+    rms: 0.000801
+  - id: silencio03
+    file: silencio03.wav
+    text: ""
+    tags: [silencio]
+    duration_s: 3.0
+    n_words: 0
+    rms: 0.004003

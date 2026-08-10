@@ -1,0 +1,12 @@
+# Normaliza finales de linea: LF en el repositorio, lo que toque en cada working copy.
+# Sin esto, un clon en Windows y otro en WSL producen diffs de fichero entero.
+* text=auto eol=lf
+
+# PowerShell quiere CRLF: algunos hosts se atragantan con LF en .ps1
+*.ps1 text eol=crlf
+
+# Binarios: que git no toque nada
+*.wav binary
+*.onnx binary
+*.png binary
+*.ico binary
