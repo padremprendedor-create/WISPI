@@ -1,6 +1,6 @@
 # ROADMAP — WISPI
 
-**Última actualización:** 2026-08-09 · **Estado:** v0.2 en uso diario real
+**Última actualización:** 2026-08-10 · **Estado:** v0.2 en uso diario real, repo preparado para open source
 
 El objetivo sigue siendo el de [SPEC.md](SPEC.md): que Wispr Flow se pueda desinstalar sin
 echarlo de menos. Todo lo de aquí se ordena por eso, no por lo interesante que sea.
@@ -27,6 +27,18 @@ echarlo de menos. Todo lo de aquí se ordena por eso, no por lo interesante que 
 - [x] Teclado táctil: teclas, navegación, 36 símbolos, opciones
 - [x] Doble toque para abrir el panel, con cancelación del dictado iniciado
 - [x] Auto-repetición en Retroceso, Supr y flechas
+
+### Publicación (2026-08-10)
+- [x] Licencia MIT, `SECURITY.md` con el modelo de amenaza del hook global,
+      `CONTRIBUTING.md` y plantillas de issue
+- [x] README con requisitos de sistema medidos e instalación desde cero, y `README.en.md`
+- [x] Diccionario despersonalizado (40 términos universales); los nombres propios salen a
+      `dictionary.personal.example.yaml`
+- [x] CI en Windows: `uv sync --frozen` + regresión del nivel 0 (lo único que un runner
+      puede probar de verdad)
+- [x] Historial aplanado a un commit inicial limpio; el anterior queda en la rama local
+      `historial-privado`
+- [ ] **Poner el repo en público** — decisión del founder, no se toca desde aquí
 
 ---
 
