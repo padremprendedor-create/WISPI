@@ -1,12 +1,19 @@
 # Configuracion de WISPI. Todos los valores tienen default en wispi/config.py;
 # aqui solo hace falta lo que quieras cambiar. Se recarga en caliente al guardar
 # (poll de mtime cada 2 s) salvo las claves marcadas [REINICIO].
+#
+# [REINICIO] no es "no se recarga y ya veras": la lista vive en
+# `wispi/config.py::RESTART_ONLY`, y al recargar WISPI conserva el valor que esta
+# usando y te lo DICE en el log. Una perilla que no hace nada y se calla es la
+# forma mas rapida de que dejes de fiarte de todo el fichero.
 
 audio:
-  sample_rate: 16000        # requerido por whisper; no cambiar
-  input_device: null        # null = micro por defecto; o indice/nombre de sounddevice
-  block_ms: 30              # tamano del bloque del callback de PortAudio
-  preroll_ms: 300           # ring que se vuelca al empezar a grabar (no comerse la 1a silaba)
+  sample_rate: 16000        # requerido por whisper; no cambiar [REINICIO]
+  input_device: null        # null = micro por defecto; o indice/nombre [REINICIO]
+  block_ms: 30              # tamano del bloque del callback de PortAudio [REINICIO]
+  # Ring que se vuelca al empezar a grabar (no comerse la 1a silaba). Fija el
+  # maxlen de un deque que el callback esta usando, por eso no entra en caliente.
+  preroll_ms: 300           # [REINICIO]
   tail_ms: 200              # cola tras el key-up (no cortar la ultima silaba)
   max_duration_s: 60.0      # tope duro de un dictado
   min_duration_s: 0.35      # por debajo de esto se descarta sin llamar al ASR
@@ -22,10 +29,13 @@ hotkey:
   # Ctrl+Win: es el combo de Wispr Flow y esta limpio en teclado espanol.
   # OJO: NUNCA usar Right Alt (0xA5) -> es AltGr y genera @ # ~ [ ] \.
   # Tampoco Ctrl+Alt+<tecla>, que Windows trata como AltGr+<tecla>.
-  combo: [ctrl, win]
+  # De combo y cancel_key salen las mascaras de bits que lee el callback del
+  # hook. Se podrian recalcular al vuelo, pero el hook es el punto de fallo nº 1
+  # y el combo se elige una vez en la vida: no vale la pena la carrera.
+  combo: [ctrl, win]        # [REINICIO]
+  cancel_key: esc           # [REINICIO]
   double_tap_ms: 400        # doble-toque -> modo manos libres
   tap_max_ms: 250           # una pulsacion mas larga que esto NO es un toque: es PTT
-  cancel_key: esc
   suppress_start_menu: true # emite VK 0xE8 intermedio para que Win no abra Inicio
   rehook_interval_s: 300    # watchdog: reinstalar el hook cada N segundos
   slow_callback_ms: 50      # un callback mas lento que esto fuerza re-enganche inmediato
@@ -75,7 +85,7 @@ wake:
   # depende de lo que dure el clip. Subirlo a 4 recorta ~150 ms de la espera
   # entre que terminas de decir "hey WISPI" y suena el tono. [REINICIO]
   cpu_threads: 2
-  fallback_chain:           # si `tiny` no esta en disco
+  fallback_chain:           # si `tiny` no esta en disco. [REINICIO]
     - {model: base}
     - {model: small}
   # Vacio. Sesgar el decoder hacia "WISPI" sube los aciertos pero tambien hace
@@ -180,11 +190,12 @@ injection:
   terminal_llm_wait_ms: 700 # en terminal se espera acotado y se escribe UNA vez
 
 logging:
-  level: INFO
+  # El logger se configura una sola vez, al arrancar.
+  level: INFO               # [REINICIO]
+  max_bytes: 5242880        # [REINICIO]
+  backup_count: 3           # [REINICIO]
   include_text: false       # NUNCA guardar el transcrito. Solo tiempos y longitudes.
   latency_jsonl: true
-  max_bytes: 5242880
-  backup_count: 3
 
 ui:
   chime_enabled: true

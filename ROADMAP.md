@@ -60,6 +60,19 @@ echarlo de menos. Todo lo de aquí se ordena por eso, no por lo interesante que 
       verificado es la lógica sobre texto y audio sintético, no que `tiny` oiga "wispi"
       en boca de Junior
 
+### Recarga en caliente: la promesa era falsa (2026-08-10)
+- [x] `Config.maybe_reload()` sustituía las dataclasses de sección, así que `audio.py`,
+      `hotkey.py`, `inject/injector.py` y `wake.py` —que guardan la suya al construirse—
+      seguían usando los valores del arranque. **C10.3 llevaba meses dándose por bueno
+      porque se comprobaba en `cfg`, que siempre estuvo bien.** Ver H5 en el SPEC
+- [x] Arreglo de raíz: las secciones se mutan en sitio y su identidad no cambia nunca
+- [x] `config.py::RESTART_ONLY` declara las 12 claves que no admiten cambio en caliente;
+      al tocarlas se conserva el valor vivo y se registra un WARNING en vez de callarse
+- [x] `WispiApp._on_config_reloaded()` es el único sitio para lo que la identidad estable
+      no arregla: lo derivado una vez y lo copiado por valor
+- [x] `tools/test_config_reload.py` en CI. Comprobado que se pone **rojo (12 fallos)** si
+      se reintroduce el comportamiento viejo: un test verde que no puede fallar no vale
+
 A partir de aquí el repositorio lo puede leer cualquiera. Dos consecuencias que
 conviene tener presentes al tocarlo:
 

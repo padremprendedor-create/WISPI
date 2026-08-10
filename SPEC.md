@@ -140,7 +140,14 @@ Contra estos se verifica, **nunca contra el `status` que un agente se ponga a s�
 - **C10.1** Tras reiniciar Windows, el icono está en la bandeja **sin ventana de consola** y el
   primer dictado funciona sin tocar nada.
 - **C10.2** Con Pausar activo, `Ctrl+Win` no hace nada.
-- **C10.3** Editar `config.yaml` recarga en < 3 s sin reiniciar.
+- **C10.3** Editar `config.yaml` recarga en < 3 s sin reiniciar, **y el valor nuevo llega
+  al módulo que lo consume**, no solo al objeto `Config`. Las claves de
+  `config.py::RESTART_ONLY` son la excepción declarada: se conserva el valor vivo y se
+  registra un WARNING. ✅ VERIFICADO — `tools/test_config_reload.py` (12 comprobaciones
+  en caliente + identidad de secciones), y en la app en marcha el 2026-08-10:
+  `tail_ms`, `silence_threshold`, `restore_clipboard`, `wake.threshold`, los frames
+  derivados del segmentador y el volumen de los chimes entran solos; `wake.model` se
+  conserva y avisa. Ver H5.
 - **C10.4** Desconectar el micro USB en caliente produce error visible, no crash.
 
 ### C11 — Palabra de activación ("hey WISPI")
@@ -272,6 +279,40 @@ Segundo hallazgo del mismo sitio: hizo falta una regla fonética, **-y final →
 perfectamente normal de la frase. En español las dos terminaciones suenan igual y el
 modelo elige sin criterio; aplicando la regla a los dos lados de la comparación sube a
 0,824 sin inventar parecidos. Ninguna de las 18 trampas empeoró.
+
+### H5 — La recarga en caliente llegaba al `Config` y no a los módulos
+
+`maybe_reload()` volvía cada sección a sus defaults con
+`setattr(self, 'audio', AudioCfg())`, o sea, **creaba un objeto nuevo**. Pero `audio.py`,
+`hotkey.py`, `inject/injector.py` y `wake.py` guardan su sección al construirse, así que
+seguían apuntando a la vieja. Medido el 2026-08-10, con `tail_ms` editado a 333:
+
+```
+cfg.audio.tail_ms              = 333   <- lo nuevo
+app.audio.cfg.tail_ms          = 200   <- lo que USA audio.py
+app.audio.cfg is app.cfg.audio -> False
+```
+
+C10.3 llevaba meses dándose por bueno porque **se comprobaba en `cfg`, que siempre estuvo
+bien**. Es el mismo error de método que H3: verificar el sitio equivocado. Y el fallo no
+se ve — no hay excepción ni log, la perilla simplemente no hace nada.
+
+Dos correcciones, no una:
+
+1. **De raíz:** las secciones se mutan campo a campo y su identidad no cambia nunca. Es
+   el contrato que todos los consumidores ya asumían sin decirlo. La alternativa que se
+   probó primero —repuntar la referencia a mano desde `app.py`, como hacía `_sync_wake`—
+   obliga a acordarse en cada módulo nuevo, y olvidarse no da error: da un valor viejo.
+2. **Lo que no puede ser caliente se declara y se avisa** (`config.py::RESTART_ONLY`).
+   Aplicar `audio.sample_rate` en caliente no es una perilla sin efecto: haría que
+   `_to_target()` resampleara a un rate que el ASR no espera, o sea transcripciones
+   basura. Se conserva el valor vivo y se registra un WARNING.
+
+Quedan dos cosas que la identidad estable no arregla y hay que sincronizar a mano desde
+`WispiApp._on_config_reloaded()`: lo que se **deriva** una vez (los frames del
+segmentador de `wake.py`) y lo que se **copia por valor** (`Feedback`, que además
+pregenera los tonos). Un módulo nuevo que haga cualquiera de las dos cosas se añade ahí
+y a `tools/test_config_reload.py`.
 
 ## 7. Regla de verificación
 

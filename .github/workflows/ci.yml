@@ -68,5 +68,12 @@ jobs:
       - name: Regresion de la palabra de activacion
         run: uv run python tools/test_wake.py
 
+      # Prueba 4: que la recarga en caliente llegue AL MODULO y no solo al objeto
+      # Config. Cabe aqui porque son ficheros temporales y dataclasses: sin micro,
+      # sin hook y sin modelo. Existe porque este fallo estuvo meses vivo y era
+      # invisible -la perilla no hacia nada y no habia ni un log-. Ver H5 del SPEC.
+      - name: Regresion de la recarga en caliente
+        run: uv run python tools/test_config_reload.py
+
       - name: Compilar todo el arbol
         run: uv run python -m compileall -q wispi tools

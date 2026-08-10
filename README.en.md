@@ -309,6 +309,13 @@ held. WISPI **never** swallows those keys: it only observes.
 window writes to `config.local.yaml`, which **overrides** `config.yaml` — so if you edit
 a key by hand and see no effect, look there.
 
+Keys marked **`[REINICIO]`** are the exception, and there are few: the microphone is
+already open and negotiated, the hook is already installed, the model is already loaded.
+When you change one, WISPI **keeps the value it's running and says so in the log** rather
+than staying quiet — a knob that does nothing and doesn't admit it is the fastest way to
+lose trust in the whole file. The list lives in `wispi/config.py::RESTART_ONLY`, and
+`tools/test_config_reload.py` checks it stays true.
+
 **Both files are commented in Spanish.** The keys are English; the explanations aren't.
 
 ```yaml
@@ -500,6 +507,7 @@ tools/
   target_window.py target window for testing cross-process injection
   e2e_pipeline.py  the 21 end-to-end tests
   test_wake.py     36 wake-word cases (matching + segmentation)
+  test_config_reload.py  that editing config.yaml reaches THE MODULE, not just Config
 ```
 
 ## The two places this can break

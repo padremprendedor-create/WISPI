@@ -376,7 +376,7 @@ class WispiApp:
             for w in warns:
                 log.warning("config: %s", w)
             log.info("config recargada")
-            self._sync_wake()
+            self._on_config_reloaded()
         if self.post.reload_dictionary():
             log.info("diccionario recargado")
 
@@ -388,20 +388,38 @@ class WispiApp:
                 log.warning("tope de %.0fs alcanzado; finalizando", self.cfg.audio.max_duration_s)
                 self._finalize(now_ns())
 
+    def _on_config_reloaded(self) -> None:
+        """UNICO sitio donde se re-aplica lo que no basta con leer de `self.cfg`.
+
+        Desde que `Config.maybe_reload()` muta las secciones en sitio, casi todo
+        se recarga solo: quien guardo una referencia a su seccion ve los valores
+        nuevos sin hacer nada. Aqui quedan los dos casos que no encajan en eso:
+        lo que se DERIVA de la config una sola vez, y lo que se COPIO por valor.
+        Si añades un modulo que haga cualquiera de las dos cosas, se sincroniza
+        desde aqui y se le añade un caso a `tools/test_config_reload.py`.
+        """
+        # Feedback copia los valores y ademas pregenera los tonos, asi que no le
+        # vale con que la seccion sea la misma.
+        fb, ui = self.fb, self.cfg.ui
+        if fb.enabled != ui.chime_enabled or fb.volume != float(ui.chime_volume):
+            fb.enabled = bool(ui.chime_enabled)
+            fb.set_volume(float(ui.chime_volume))
+        self._sync_wake()
+
     def _sync_wake(self) -> None:
         """Enciende o apaga la palabra de activacion tras recargar la config.
 
-        OJO CON LA REFERENCIA: `Config.maybe_reload()` SUSTITUYE las dataclasses
-        de cada seccion por objetos nuevos. La que guardo el detector al
-        construirse se queda apuntando a la vieja, asi que hay que volver a
-        apuntarla a mano o `wake` seria el unico bloque que no se recarga.
+        Ya NO hace falta repuntar `self.wake.cfg`: desde que `maybe_reload()`
+        muta las secciones en sitio, la referencia que guardo el detector al
+        construirse sigue siendo valida. Lo que si hay que pedirle es que
+        re-derive los frames del segmentador, porque esos se calculan una vez.
 
-        Cambiar `wake.model` en caliente NO recarga el modelo (eso exige
-        reiniciar); lo que si entra al vuelo son las frases, los umbrales y el
-        interruptor.
+        `wake.model` y `wake.cpu_threads` no entran en caliente -el modelo se
+        carga al arrancar el hilo-; de conservarlos y avisar se encarga
+        `config.py::RESTART_ONLY`.
         """
-        self.wake.cfg = self.cfg.wake
         self.wake.log_text = self.cfg.logging.include_text
+        self.wake.reconfigure()
         quiere = self.cfg.wake.enabled
         activo = self.wake.is_alive
         if quiere and not activo:

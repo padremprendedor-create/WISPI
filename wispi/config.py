@@ -5,16 +5,66 @@ Contrato con el resto del programa:
     - Ningun modulo lee el YAML por su cuenta ni conoce rutas de fichero.
     - `Config.maybe_reload()` hace poll de mtime; devuelve True si recargo.
       Se llama desde el hilo de estado, nunca desde el callback del hook.
+    - **LA IDENTIDAD DE CADA SECCION NO CAMBIA NUNCA.** `cfg.audio` es el mismo
+      objeto durante toda la vida del proceso. Ver abajo por que es un contrato
+      y no un detalle.
+
+## POR QUE LAS SECCIONES SE MUTAN EN SITIO Y NO SE SUSTITUYEN
+
+`maybe_reload()` hacia `setattr(self, 'audio', AudioCfg())`, o sea, creaba un
+objeto NUEVO por seccion. Los modulos que guardan la suya al construirse
+-`audio.py`, `hotkey.py`, `inject/injector.py`, `wake.py`- se quedaban apuntando
+al viejo, asi que **la recarga en caliente no les llegaba** y seguian usando los
+valores del arranque. El README prometia recarga en < 3 s y era falso para
+`tail_ms`, `silence_threshold`, `restore_clipboard`, `terminal_apps` y todo lo
+que vive en esos modulos. Medido el 2026-08-10: con `tail_ms` editado a 333,
+`cfg.audio.tail_ms` valia 333 y `audio.cfg.tail_ms` seguia en 200.
+
+El arreglo es de raiz: se resetean los CAMPOS de la instancia existente en vez de
+cambiar la instancia. Repuntar las referencias a mano desde `app.py` -que es lo
+que se hizo primero para `wake`- obliga a acordarse en cada modulo nuevo, y
+olvidarse no da error: da un valor viejo en silencio, que es el peor fallo
+posible.
 """
 from __future__ import annotations
 
 import copy
 import os
-from dataclasses import dataclass, field, fields, is_dataclass
+from dataclasses import MISSING, dataclass, field, fields, is_dataclass
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+# Claves que NO pueden cambiar con el proceso en marcha. Al recargar se conserva
+# el valor VIVO y se avisa; el del fichero entra en el proximo arranque.
+#
+# La alternativa -aplicarlas y que el modulo se entere cuando pueda- es peor de
+# lo que parece: `audio.sample_rate` en caliente haria que `_to_target()`
+# resamplease a un rate que el ASR no espera (su contrato es 16 kHz), o sea
+# transcripciones basura en vez de una perilla sin efecto.
+#
+# CRITERIO para meter una clave aqui: que el valor se consuma UNA vez, al
+# construir o al arrancar, y que volver a consumirlo exija rehacer algo que no se
+# puede rehacer sin parar (el InputStream negociado, el hook instalado, el modelo
+# cargado). Si se lee en cada uso, no entra: eso ya es caliente y gratis.
+#
+# `asr` NO esta aqui a proposito: sus claves si se aplican al objeto, y quien las
+# consume es `WispiApp.reload_asr()` cuando el usuario pulsa "Aplicar y recargar
+# el motor". Conservarlas romperia ese boton.
+RESTART_ONLY: dict[str, tuple[str, ...]] = {
+    # El InputStream ya esta abierto y negociado con estos tres.
+    # `preroll_ms` ademas fija el `maxlen` del ring, que el callback esta usando.
+    "audio": ("sample_rate", "input_device", "block_ms", "preroll_ms"),
+    # De estas dos salen las mascaras de bits que lee el callback del hook.
+    # Se PODRIAN recalcular en caliente, pero el hook es el punto de fallo nº 1 y
+    # el combo se elige una vez en la vida: no vale la pena la carrera.
+    "hotkey": ("combo", "cancel_key"),
+    # El logger se configura una sola vez, en `main()`.
+    "logging": ("level", "max_bytes", "backup_count"),
+    # El modelo del detector se construye al arrancar su hilo.
+    "wake": ("model", "cpu_threads", "fallback_chain"),
+}
 
 ROOT = Path(__file__).resolve().parent.parent
 CONFIG_PATH = ROOT / "config.yaml"
@@ -301,14 +351,64 @@ class Config:
             lmtime = 0.0
         if mtime == self._mtime and lmtime == self._local_mtime:
             return False, []
-        # Volver a los defaults antes de aplicar, para que borrar una clave del
-        # YAML tambien surta efecto (si no, quedaria pegado el valor viejo).
+
+        # Lo que esta CORRIENDO ahora mismo, antes de tocar nada. Es contra esto
+        # -y no contra los defaults- contra lo que se compara para saber si una
+        # clave de reinicio ha cambiado de verdad.
+        vivo = {
+            sec: {k: getattr(getattr(self, sec), k) for k in claves}
+            for sec, claves in RESTART_ONLY.items()
+            if is_dataclass(getattr(self, sec, None))
+        }
+
+        self._reset_sections_in_place()
+        warns = self._apply_all()
+        warns += self._keep_restart_only(vivo)
+        return True, warns
+
+    def _reset_sections_in_place(self) -> None:
+        """Devuelve cada seccion a sus defaults SIN cambiar el objeto.
+
+        Se resetea antes de aplicar para que borrar una clave del YAML tambien
+        surta efecto (si no, quedaria pegado el valor viejo). Y se hace campo a
+        campo, no sustituyendo la instancia, porque media aplicacion guarda una
+        referencia a su seccion: ver la cabecera del modulo.
+        """
         for f in fields(self):
             if f.name.startswith("_") or f.name in ("path", "local_path"):
                 continue
-            if f.default_factory is not None:  # type: ignore[misc]
-                setattr(self, f.name, f.default_factory())  # type: ignore[misc]
-        return True, self._apply_all()
+            if f.default_factory is MISSING:  # type: ignore[misc]
+                continue
+            actual = getattr(self, f.name, None)
+            nuevo = f.default_factory()  # type: ignore[misc]
+            if not is_dataclass(actual):
+                setattr(self, f.name, nuevo)
+                continue
+            # `nuevo` es una instancia recien hecha, asi que sus listas y dicts
+            # son objetos propios: no se comparte estado entre recargas.
+            for sf in fields(nuevo):
+                setattr(actual, sf.name, getattr(nuevo, sf.name))
+
+    def _keep_restart_only(self, vivo: dict[str, dict[str, Any]]) -> list[str]:
+        """Restaura las claves que no admiten cambio en caliente y avisa de ello.
+
+        Avisar es la mitad del arreglo. Una perilla que no hace nada y no lo dice
+        es exactamente el fallo que este modulo venia a quitar: el usuario edita,
+        no ve efecto y deja de fiarse de todo el fichero.
+        """
+        avisos: list[str] = []
+        for sec, claves in vivo.items():
+            obj = getattr(self, sec)
+            for clave, valor_vivo in claves.items():
+                del_fichero = getattr(obj, clave)
+                if del_fichero == valor_vivo:
+                    continue
+                setattr(obj, clave, valor_vivo)
+                avisos.append(
+                    f"{sec}.{clave}={del_fichero!r} exige reiniciar WISPI; "
+                    f"de momento sigue en {valor_vivo!r}"
+                )
+        return avisos
 
     # -- escritura de overrides -------------------------------------------
     def read_overrides(self) -> dict[str, Any]:

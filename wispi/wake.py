@@ -222,6 +222,7 @@ class WakeWord:
         self._max_speech = 0
         self._end_silence = 0
         self._rms_threshold = float(cfg.rms_threshold or 0.012)
+        self._needs_reconfigure = False
 
         # -- diagnostico -----------------------------------------------------
         self.checks = 0                 # veces que se ha llamado al ASR
@@ -268,6 +269,17 @@ class WakeWord:
         else:
             self._armed.clear()
 
+    def reconfigure(self) -> None:
+        """Pide re-derivar los frames del segmentador. Lo llama `app.py` al recargar.
+
+        `min_speech_s` y compania se traducen a FRAMES una sola vez, asi que
+        cambiarlos en config.yaml no se notaria aunque `self.cfg` ya sea el valor
+        nuevo. Se hace por bandera y no aqui mismo porque quien tiene que
+        recalcular es el hilo de wake: tocar `_pre` desde fuera pisaria al unico
+        escritor que tiene ese deque.
+        """
+        self._needs_reconfigure = True
+
     # ------------------------------------------------------- callback de audio
     def feed(self, block: np.ndarray, rms: float) -> None:
         """Hilo de PortAudio. UNA operacion: `deque.append` es atomica bajo el GIL.
@@ -306,7 +318,8 @@ class WakeWord:
             now_rate = int(getattr(self.capture, "stream_rate", 0) or 0)
             if now_rate <= 0:
                 continue
-            if now_rate != rate:
+            if now_rate != rate or self._needs_reconfigure:
+                self._needs_reconfigure = False
                 rate = now_rate
                 self._reset_segment()
                 self._configure(rate)

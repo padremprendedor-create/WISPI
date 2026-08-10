@@ -318,6 +318,14 @@ se traga esas teclas: solo observa.
 ## Configuración
 
 `config.yaml` se recarga en caliente (< 3 s, sin reiniciar). `dictionary.yaml` también.
+
+Las claves marcadas **`[REINICIO]`** en `config.yaml` son la excepción, y son pocas: el
+micrófono ya está abierto y negociado, el hook ya está instalado, el modelo ya está
+cargado. Cuando cambias una, WISPI **conserva el valor que está usando y te lo dice en el
+log** en vez de callarse — una perilla que no hace nada y no lo avisa es la forma más
+rápida de que dejes de fiarte del fichero entero. La lista vive en
+`wispi/config.py::RESTART_ONLY` y `tools/test_config_reload.py` comprueba que sigue
+siendo verdad.
 Lo que escribe la ventana de configuración va a `config.local.yaml`, que **gana** sobre
 `config.yaml` (por eso, si tocas una clave a mano y no ves el efecto, mira ahí).
 
@@ -523,6 +531,7 @@ tools/
   target_window.py ventana diana para probar la inyección cross-process
   e2e_pipeline.py  las 21 pruebas end-to-end
   test_wake.py     36 casos de la palabra clave (emparejado + segmentador)
+  test_config_reload.py  que editar config.yaml llegue AL MÓDULO, no solo al Config
 ```
 
 ## Los dos sitios donde esto se puede romper
