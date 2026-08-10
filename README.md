@@ -217,7 +217,7 @@ contramedida real es que el código no escriba lo que ve. El default es sin elev
 | Mantener `Ctrl+Win` | Graba mientras la sujetas (push-to-talk) |
 | Doble toque rápido de `Ctrl+Win` | Manos libres: corta solo tras 1,2 s de silencio |
 | `Esc` mientras graba | Cancela. Cero caracteres insertados |
-| **Decir "hey WISPI"** | Manos libres sin tocar nada. Apagado por defecto — ver abajo |
+| **Decir "hey WISPI"** | Manos libres sin tocar nada. Escucha el micro — ver abajo |
 | **Un toque en el botón flotante** | Empieza o termina el dictado |
 | **Doble toque en el botón** | Abre el teclado táctil |
 | Arrastrar el botón | Moverlo; la posición se guarda sola |
@@ -234,13 +234,18 @@ uv run python tools/test_wake.py            # 36 casos de la palabra clave, sin 
 
 ### "hey WISPI" — dictar sin tocar nada
 
-Está **apagada por defecto**. Enciéndela en `config.yaml` (o en la pestaña *Palabra
-clave* de la ventana de configuración):
-
-```yaml
-wake:
-  enabled: true
-```
+> **Viene encendida en `config.yaml`.** Es la única función que analiza el micrófono sin
+> que hayas pedido nada: mientras está activa, lo que se diga cerca del micro pasa por el
+> detector. No sale un byte de tu máquina y no se guarda en ningún log, pero es un
+> micrófono siempre puesto y mereces saberlo antes de usarlo. Para apagarla:
+>
+> ```yaml
+> wake:
+>   enabled: false
+> ```
+>
+> También se apaga desde la pestaña *Palabra clave* de la ventana de configuración. El
+> valor por defecto en el código es `false`; es este `config.yaml` el que la enciende.
 
 Dices "hey WISPI", suena el tono, hablas, y corta solo cuando callas. No sustituye a
 `Ctrl+Win` —que sigue siendo el camino rápido y el que nunca falla— sino que cubre el
@@ -429,11 +434,12 @@ como *"Create an endpoint"*.
   (`logging.include_text: false`).
 - El logger nunca registra el `vkCode` de teclas fuera del combo.
 - Con `local_files_only: true`, WISPI arranca y transcribe sin red.
-- **La palabra de activación viene apagada.** Es la única función que analiza el
-  micrófono sin que hayas pedido nada, así que encenderla tiene que ser una decisión
-  tuya y no una sorpresa. Cuando está encendida sigue sin salir un byte —el
-  reconocimiento es local, igual que el dictado— y **lo que oye no se guarda en ningún
-  log**, ni siquiera lo que descarta, salvo que pongas `include_text: true` a propósito.
+- **La palabra de activación viene encendida en `config.yaml`** (`wake.enabled: true`),
+  y es la única función que analiza el micrófono sin que hayas pedido nada. Sigue sin
+  salir un byte —el reconocimiento es local, igual que el dictado— y **lo que oye no se
+  guarda en ningún log**, ni siquiera lo que descarta, salvo que pongas
+  `include_text: true` a propósito. Aun así es un micrófono siempre puesto: si no lo
+  quieres, `wake.enabled: false`. El default del código es `false`.
 
 WISPI instala un hook de teclado global, lee el portapapeles e inyecta pulsaciones. Eso
 merece más de un párrafo: el modelo de amenaza completo, qué comprobar y en qué fichero,

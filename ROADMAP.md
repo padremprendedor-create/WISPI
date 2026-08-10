@@ -53,7 +53,9 @@ echarlo de menos. Todo lo de aquí se ordena por eso, no por lo interesante que 
 - [x] Pestaña *Palabra clave* en configuración, `selftest --wake` para calibrar en vivo
 - [x] `tools/test_wake.py`: 18 variantes + 18 trampas + 6 escenarios de segmentación.
       **36/36 y 6/6 sin voz humana**
-- [x] Apagada por defecto: es la única función que analiza el micro sin que se lo pidan
+- [x] Encendida en `config.yaml` para poder probarla; el default del código sigue en
+      `false` y el fichero explica por qué y cómo apagarla. Es la única función que
+      analiza el micro sin que se lo pidan, así que no puede quedar escondida
 - [ ] 🔴 **Falta lo que ningún agente puede cerrar: probarla con voz real** (C11.2). Lo
       verificado es la lógica sobre texto y audio sintético, no que `tiny` oiga "wispi"
       en boca de Junior

@@ -212,7 +212,7 @@ write down what it sees. That's why the default is unelevated.
 | Hold `Ctrl+Win` | Records while held (push-to-talk) |
 | Quick double-tap of `Ctrl+Win` | Hands-free: stops after 1.2 s of silence |
 | `Esc` while recording | Cancels. Zero characters inserted |
-| **Saying "hey WISPI"** | Hands-free without touching anything. Off by default — see below |
+| **Saying "hey WISPI"** | Hands-free without touching anything. Listens to the mic — see below |
 | **Single tap on the floating button** | Start or stop dictation |
 | **Double tap on the button** | Opens the touch keyboard |
 | Drag the button | Move it; position is saved automatically |
@@ -229,13 +229,19 @@ uv run python tools/test_wake.py            # 36 wake-word cases, no voice neede
 
 ### "hey WISPI" — dictating without touching anything
 
-**Off by default.** Turn it on in `config.yaml` (or in the *Palabra clave* tab of the
-settings window):
-
-```yaml
-wake:
-  enabled: true
-```
+> **This ships enabled in `config.yaml`.** It's the only feature that analyses the
+> microphone without you asking for anything: while it's on, whatever is said near the
+> mic goes through the detector. Not one byte leaves your machine and nothing is written
+> to any log, but it is an always-on microphone and you deserve to know before using it.
+> To turn it off:
+>
+> ```yaml
+> wake:
+>   enabled: false
+> ```
+>
+> The *Palabra clave* tab of the settings window does the same. The code default is
+> `false`; it's this `config.yaml` that switches it on.
 
 Say "hey WISPI", hear the chime, talk, and it stops when you go quiet. It does not
 replace `Ctrl+Win` — that stays the fast path and the one that never fails — it covers
@@ -418,11 +424,12 @@ endpoint"* came out as *"Create an endpoint"*.
   (`logging.include_text: false`).
 - The logger never records `vkCode` for keys outside the configured combo.
 - With `local_files_only: true`, WISPI starts and transcribes with no network at all.
-- **The wake word ships off.** It's the only feature that analyses the microphone
-  without you asking for anything, so switching it on has to be your decision, not a
-  surprise. With it on, still not one byte leaves the machine — recognition is local,
-  same as dictation — and **what it hears is never written to any log**, not even what
-  it discards, unless you deliberately set `include_text: true`.
+- **The wake word ships enabled in `config.yaml`** (`wake.enabled: true`), and it's the
+  only feature that analyses the microphone without you asking for anything. Still not
+  one byte leaves the machine — recognition is local, same as dictation — and **what it
+  hears is never written to any log**, not even what it discards, unless you
+  deliberately set `include_text: true`. It is still an always-on microphone: if you
+  don't want it, `wake.enabled: false`. The code default is `false`.
 
 WISPI installs a global keyboard hook, reads the clipboard and injects keystrokes. That
 deserves more than a paragraph: the full threat model, what to verify and in which file,

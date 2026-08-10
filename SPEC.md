@@ -148,9 +148,11 @@ Contra estos se verifica, **nunca contra el `status` que un agente se ponga a s�
 Añadido en v0.3. Objetivo real: **dictar sin tocar nada** cuando las manos no están en el
 teclado. No sustituye a `Ctrl+Win`, que sigue siendo el camino rápido y el que nunca falla.
 
-- **C11.1** Con `wake.enabled: false` (default) el detector **no existe**: cero hilos nuevos,
-  cero modelos cargados, cero CPU. Verificable en `status()["wake"]["enabled"] == False`
-  y en que `wispi.log` no registra ninguna línea de `wake`.
+- **C11.1** Con `wake.enabled: false` el detector **no existe**: cero hilos nuevos, cero
+  modelos cargados, cero CPU. Verificable en `status()["wake"]["enabled"] == False` y en
+  que `wispi.log` no registra ninguna línea de `wake`. El default del **código** es
+  `false`; `config.yaml` lo enciende a propósito y lo dice en un comentario, porque un
+  micrófono siempre puesto no puede quedar escondido en un valor por defecto.
 - **C11.2** Decir "hey WISPI" con WISPI en reposo arranca un dictado en **manos libres**
   (corta solo por silencio), sin tocar teclado ni ratón. 🔴 **HUMANO** — exige voz real.
 - **C11.3** **La frase de activación nunca se escribe.** Tras despertar, el texto insertado

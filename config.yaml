@@ -35,15 +35,21 @@ wake:
   # "hey WISPI" arranca un dictado en manos libres sin tocar nada. NO sustituye a
   # Ctrl+Win: es para cuando no tienes las manos en el teclado.
   #
-  # APAGADA POR DEFECTO A PROPOSITO. Es la unica funcion que analiza el microfono
-  # sin que hayas pedido nada. Todo sigue siendo local -no sale un byte- pero
-  # encenderla tiene que ser una decision tuya.
+  # LEE ESTO ANTES DE DEJARLO EN true. Es la unica funcion de WISPI que analiza el
+  # microfono sin que hayas pedido nada: mientras esta encendida, todo lo que se
+  # diga cerca del micro pasa por el detector. NO sale un byte de la maquina y no
+  # se guarda en ningun log (ver logging.include_text), pero es un microfono
+  # siempre puesto y conviene saberlo. Para apagarla, `false` aqui y ya esta.
   #
-  # LA PRIMERA VEZ necesita el modelo `tiny` en disco. Si no lo tienes, o pones
+  # El valor por defecto EN EL CODIGO (wispi/config.py) es false; este fichero lo
+  # enciende a proposito. Si clonas WISPI y no quieres que escuche, esta es la
+  # linea que tienes que tocar.
+  #
+  # NECESITA el modelo `tiny` en disco. Si no lo tienes, o pones
   # asr.local_files_only en false una vez para que se descargue (~75 MB), o dejas
   # que caiga por fallback_chain al `base`/`small` que ya tengas (mas lento pero
   # funciona). Si no carga ninguno, se avisa en el log y Ctrl+Win sigue igual.
-  enabled: false
+  enabled: true
 
   # Formas, no ortografias. El emparejado es DIFUSO porque "wispi" no es una
   # palabra espanola y el modelo la escribe distinto cada vez (Wispy, Guispi,
