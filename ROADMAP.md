@@ -56,9 +56,13 @@ echarlo de menos. Todo lo de aquí se ordena por eso, no por lo interesante que 
 - [x] Encendida en `config.yaml` para poder probarla; el default del código sigue en
       `false` y el fichero explica por qué y cómo apagarla. Es la única función que
       analiza el micro sin que se lo pidan, así que no puede quedar escondida
-- [ ] 🔴 **Falta lo que ningún agente puede cerrar: probarla con voz real** (C11.2). Lo
-      verificado es la lógica sobre texto y audio sintético, no que `tiny` oiga "wispi"
-      en boca de Junior
+- [x] **C11.2 verificado con voz real** — 2026-08-10, `selftest --wake`: 2 activaciones
+      sobre 3 enunciados con la voz de Junior. Dos variantes nuevas que ni estaban en el
+      corpus sintético — *"Hey, Whisby."* (0,824) y *"¡Hey, Whispy!y."* (0,941) — se
+      añadieron a `tools/test_wake.py` con su score real, tal cual salieron
+- [ ] 🔴 **Queda C11.3: que la frase de activación no acabe escrita.** `selftest --wake`
+      solo detecta, no dicta; falta correr la app completa, decir "hey WISPI" y comprobar
+      el texto insertado
 
 ### Recarga en caliente: la promesa era falsa (2026-08-10)
 - [x] `Config.maybe_reload()` sustituía las dataclasses de sección, así que `audio.py`,
@@ -97,8 +101,8 @@ exactamente lo que aquí falta.
 - [ ] **C10.1** — reiniciar Windows y comprobar el autoarranque
       (`scripts/install_autostart.ps1`)
 - [ ] **C6.1** — 5 s de silencio con la tecla mantenida → cero caracteres
-- [ ] **C11.2/C11.3** — "hey WISPI" con voz real: que despierte, y que la frase de
-      activación **no** acabe escrita. Lo demás de C11 está verificado sin voz
+- [ ] **C11.3** — que la frase "hey WISPI" **no** acabe escrita tras el despertar.
+      C11.2 (que despierte) ya está ✅ verificado con voz real el 2026-08-10
 
 ---
 

@@ -54,6 +54,12 @@ POSITIVOS = [
     "hey vispi",
     "Hey, Wispi,",
     "wispi",               # el nombre solo tambien vale, y esta asumido
+    # -- capturadas EN VIVO con voz real, `uv run python -m wispi.selftest --wake`,
+    # 2026-08-10. No inventadas: son la salida literal de `tiny` sobre el "hey
+    # WISPI" que dijo Junior. Quedan aqui para que un ajuste de umbrales futuro
+    # no las rompa sin que nadie se entere.
+    "Hey, Whisby.",             # score real 0.824
+    "¡Hey, Whispy!y.",          # score real 0.941 (el "y." suelto es del propio ASR)
 ]
 
 # NO puede disparar. Son las trampas del criterio C11.6 mas las que salieron al

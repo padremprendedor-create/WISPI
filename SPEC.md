@@ -161,10 +161,17 @@ teclado. No sustituye a `Ctrl+Win`, que sigue siendo el camino rápido y el que 
   `false`; `config.yaml` lo enciende a propósito y lo dice en un comentario, porque un
   micrófono siempre puesto no puede quedar escondido en un valor por defecto.
 - **C11.2** Decir "hey WISPI" con WISPI en reposo arranca un dictado en **manos libres**
-  (corta solo por silencio), sin tocar teclado ni ratón. 🔴 **HUMANO** — exige voz real.
+  (corta solo por silencio), sin tocar teclado ni ratón.
+  ✅ VERIFICADO — 2026-08-10, `uv run python -m wispi.selftest --wake`, voz real de
+  Junior: **2 activaciones sobre 3 enunciados analizados** (`tiny`, `cpu_threads=2`,
+  314 ms de inferencia). Transcripciones reales: *"Hey, Whisby."* (score 0,824) y
+  *"¡Hey, Whispy!y."* (score 0,941) — ninguna estaba en el corpus sintético de
+  `tools/test_wake.py`; se añadieron después, con el score real, para que un ajuste
+  de umbrales futuro no las rompa en silencio.
 - **C11.3** **La frase de activación nunca se escribe.** Tras despertar, el texto insertado
   no contiene "hey wispi" ni variantes. Es el criterio que decide el diseño: la grabación
-  arranca **sin pre-roll** (`wake.include_preroll: false`).
+  arranca **sin pre-roll** (`wake.include_preroll: false`). 🔴 **HUMANO** — falta probar
+  el dictado completo tras el despertar (`selftest --wake` solo detecta, no dicta).
 - **C11.4** El detector **solo escucha en reposo**. Mientras se graba, transcribe, pule o
   está en pausa, está desarmado: no puede auto-dispararse con el propio dictado ni robar
   CPU al ASR real. Verificable en `status()["wake"]["armed"]`.
@@ -198,7 +205,7 @@ teclado. No sustituye a `Ctrl+Win`, que sigue siendo el camino rápido y el que 
 | 4 | Bandeja, hot-reload, autoarranque | 🔴 **HUMANO** — exige reinicio |
 | 5 | Nivel 1 LLM + inserción optimista | 🟡 automatizable |
 | 6 | Medición sobre ≥ 100 dictados reales | 🔴 **HUMANO** — exige uso real |
-| 7 | Palabra de activación "hey WISPI" (C11) | 🟡 lógica verificada sin voz (`tools/test_wake.py`); C11.2/C11.3 🔴 |
+| 7 | Palabra de activación "hey WISPI" (C11) | 🟡 C11.2 verificado con voz real; falta C11.3 (que no se escriba la frase) |
 
 ## 5. Acciones que requieren permiso humano
 
