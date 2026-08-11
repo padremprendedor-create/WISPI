@@ -263,6 +263,11 @@ class WakeWord:
         # -- diagnostico -----------------------------------------------------
         self.checks = 0                 # veces que se ha llamado al ASR
         self.detections = 0
+        # Enunciados con voz que NUNCA llegaron a `checks`: se oyo algo pero no
+        # llego a `min_speech_s`. Separado de `checks` porque significan cosas
+        # distintas para calibrar: si esto sube y `checks` no, el problema es la
+        # duracion minima, no el modelo ni los umbrales de parecido.
+        self.too_short = 0
         self.last_score = 0.0
         self.last_text = ""
         self.last_infer_ms = 0.0
@@ -475,6 +480,17 @@ class WakeWord:
         self._reset_segment()
         if speech_frames >= self._min_speech and buf:
             self._recognize(buf, rate)
+            return
+        if speech_frames > 0:
+            # Se oyo voz pero no llego a `min_speech_s`: se tira SIN llamar al
+            # ASR, que es la mitad barata del contrato de C11.5. El problema es
+            # que antes de este log era invisible -ni un WARNING, ni un DEBUG-,
+            # asi que un "no me detecta" con la palabra corta no tenia con que
+            # diagnosticarse. Contarlo aparte de `checks` es lo que le permite a
+            # `selftest --wake` decir "te oi, pero corto" en vez de "no te oi".
+            self.too_short += 1
+            self.log.debug("wake: descartado por corto (%.0f ms de voz, minimo %.0f ms)",
+                           speech_frames / rate * 1000, self._min_speech / rate * 1000)
 
     # ----------------------------------------------------------- reconocimiento
     def _recognize(self, buf: list[np.ndarray], rate: int) -> None:
@@ -534,6 +550,7 @@ class WakeWord:
             "model": (self._asr.describe().get("model") if self._asr else None),
             "phrases": list(self.cfg.phrases),
             "checks": self.checks,
+            "too_short": self.too_short,
             "detections": self.detections,
             "last_score": self.last_score,
             "last_infer_ms": round(self.last_infer_ms),

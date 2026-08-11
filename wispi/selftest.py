@@ -237,7 +237,7 @@ def test_wake(cfg: Config, seconds: int = 30) -> bool:
         wake.stop()
         return False
     print(f"{OK} detector listo: {wake._asr.describe().get('model')}")
-    print(f"\n  Di \"hey WISPI\" unas cuantas veces durante {seconds} s.")
+    print(f"\n  Di \"wispi\" unas cuantas veces durante {seconds} s.")
     print("  Haz tambien la prueba contraria: quedate callado y habla seguido; ")
     print("  ninguna de las dos deberia subir el contador de 'analizados'.\n")
 
@@ -249,21 +249,36 @@ def test_wake(cfg: Config, seconds: int = 30) -> bool:
             print(f"  {'>' * 3} ACTIVADO ({kind.name})  score={wake.last_score} "
                   f"texto={wake.last_text!r}")
         except _q.Empty:
-            print(f"  analizados={wake.checks}  activaciones={wake.detections}  "
+            print(f"  analizados={wake.checks}  cortos={wake.too_short}  "
+                  f"activaciones={wake.detections}  "
                   f"ultimo={wake.last_score:.3f} {wake.last_text[:32]!r}      ", end="\r")
 
     cap.set_wake_sink(None)
     cap.stop()
     wake.stop()
     st = wake.stats()
-    print(f"\n\n  enunciados analizados: {st['checks']}  (llamadas reales al ASR)")
-    print(f"  activaciones:          {st['detections']}")
-    print(f"  ultima inferencia:     {st['last_infer_ms']} ms")
+    print(f"\n\n  enunciados analizados:      {st['checks']}  (llamadas reales al ASR)")
+    print(f"  oidos pero DEMASIADO CORTOS: {st['too_short']}  (menos de "
+          f"{cfg.wake.min_speech_s * 1000:.0f} ms de voz -> ni se llamo al ASR)")
+    print(f"  activaciones:                {st['detections']}")
+    print(f"  ultima inferencia:           {st['last_infer_ms']} ms")
 
     if vistos == 0:
-        print(f"{WARN} no dispato ni una vez. Si el texto de arriba se parecia a "
-              f"'hey wispi', baja wake.threshold; si no se parecia en nada, prueba "
-              f"con wake.model: base.")
+        if st["too_short"] > 0 and st["checks"] == 0:
+            # Este es el caso que antes era invisible: se te oyo, pero nunca
+            # llegaste al minimo, asi que "analizados" se quedaba en 0 y parecia
+            # que WISPI ni te escuchaba.
+            print(f"{BAD} se te oyo {st['too_short']} vez(es) pero SIEMPRE por debajo "
+                  f"de {cfg.wake.min_speech_s*1000:.0f} ms. Baja wake.min_speech_s en "
+                  f"config.yaml (prueba 0.15) o di 'wispi' un pelin mas despacio.")
+        elif st["checks"] > 0:
+            print(f"{WARN} no dispato ni una vez pero SI llamo al ASR {st['checks']} "
+                  f"vez(es). Si el texto de arriba se parecia a 'wispi', baja "
+                  f"wake.threshold; si no se parecia en nada, prueba wake.model: base.")
+        else:
+            print(f"{WARN} no se detecto ni voz. Habla mas cerca del microfono o sube "
+                  f"el volumen de entrada; wake.rms_threshold usa audio.silence_threshold "
+                  f"({cfg.audio.silence_threshold}) si no se pone otro valor.")
         return False
     print(f"{OK} la palabra de activacion responde")
     return True
