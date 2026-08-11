@@ -31,6 +31,7 @@ El max_workers=1 es lo que HACE CIERTO ese contrato.
 """
 from __future__ import annotations
 
+import os
 import queue
 import sys
 import threading
@@ -56,6 +57,7 @@ log = logging_setup.get("app")
 POLL_S = 0.05          # timeout del get(); no anade latencia (get() retorna al llegar el evento)
 PERIODIC_S = 1.0       # cadencia del trabajo periodico (hot-reload, watchdog)
 NS_PER_MS = 1_000_000
+HARD_EXIT_TIMEOUT_S = 6.0  # ver stop(): tope duro para que un cierre colgado no deje zombie
 
 
 class WispiApp:
@@ -97,6 +99,11 @@ class WispiApp:
         self._combo_down_ns = 0
         self._pending_tap_until_ns = 0   # ventana viva de doble-toque
         self._last_periodic = 0.0
+        # Backoff del reintento de reconexion del audio (microfono desconectado
+        # en caliente): 1, 2, 4 ... 30 s. Se resetea a 1.0 en cuanto start()
+        # vuelve a abrir el stream. Mismo patron que hotkey.py::install_backoff_s.
+        self._audio_reconnect_backoff_s = 1.0
+        self._last_audio_reconnect_attempt = 0.0
         self._state_thread: threading.Thread | None = None
         self.on_state_change = None      # lo cablea la bandeja para cambiar el icono
 
@@ -150,8 +157,31 @@ class WispiApp:
             self._set_state(State.ERROR)
             self.fb.play("error")
 
+    def _arm_hard_exit_watchdog(self, timeout_s: float = HARD_EXIT_TIMEOUT_S) -> None:
+        """Ultimo recurso: si el cierre no termino en `timeout_s`, mata el proceso.
+
+        El 2026-08-11 un stop() se quedo colgado despues de loguear "WISPI
+        parando" + "hook desenganchado" y el proceso siguio vivo 22 horas,
+        sordo (hook desenganchado) y con el stream de audio ya muerto: cero
+        señal de que algo iba mal. Los pasos de abajo (wake.stop(),
+        audio.stop(), injector.shutdown(), y despues root.destroy() en
+        overlay.py) pueden bloquearse en vez de lanzar, y un try/except no
+        protege contra eso. Este hilo daemon es el tope: si el cierre normal
+        termina antes, el proceso ya no existe cuando el hilo despierta y
+        os._exit() nunca se ejecuta.
+        """
+        def _watchdog() -> None:
+            time.sleep(timeout_s)
+            log.error("WISPI no termino de cerrar en %.0fs; forzando salida (os._exit)",
+                      timeout_s)
+            os._exit(1)
+
+        threading.Thread(target=_watchdog, name="wispi-shutdown-watchdog",
+                         daemon=True).start()
+
     def stop(self) -> None:
         log.info("WISPI parando")
+        self._arm_hard_exit_watchdog()
         self._running.clear()
         try:
             self.hook.stop()
@@ -367,6 +397,26 @@ class WispiApp:
             log.info("el hook de teclado se recupero; WISPI vuelve a escuchar")
             self._set_state(State.IDLE)
             self.fb.play("ready")
+
+        # Vigilancia del audio: el microfono puede desconectarse en caliente
+        # (USB, suspension del equipo) y el stream muere solo. Sin esto, WISPI
+        # se queda corriendo pero sordo para siempre: cada activacion se
+        # descarta como "corto" porque begin_recording() no tiene stream vivo
+        # (audio.py::begin_recording ya avisa de esto por diseno, pero nadie
+        # llamaba de vuelta a start()). Backoff igual que el del hook: evita
+        # martillear sd.InputStream() cada segundo mientras el micro sigue sin
+        # aparecer.
+        if not self.audio.stream_ok:
+            if now - self._last_audio_reconnect_attempt >= self._audio_reconnect_backoff_s:
+                self._last_audio_reconnect_attempt = now
+                try:
+                    self.audio.start()
+                    log.info("audio: microfono reconectado")
+                    self._audio_reconnect_backoff_s = 1.0
+                except Exception as e:
+                    log.warning("audio: reintento de reconexion fallo (%s); "
+                                "proximo intento en %.0fs", e, self._audio_reconnect_backoff_s)
+                    self._audio_reconnect_backoff_s = min(self._audio_reconnect_backoff_s * 2.0, 30.0)
 
         if self.state == State.HANDS_FREE:
             self._check_hands_free_silence()

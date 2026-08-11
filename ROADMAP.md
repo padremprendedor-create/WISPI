@@ -1,6 +1,6 @@
 # ROADMAP — WISPI
 
-**Última actualización:** 2026-08-10 · **Estado:** v0.2 en uso diario real, **publicado como open source** · v0.3 (palabra de activación) construida, pendiente de prueba con voz
+**Última actualización:** 2026-08-11 · **Estado:** v0.2 en uso diario real, **publicado como open source** · v0.3 (palabra de activación) construida, pendiente de prueba con voz
 
 El objetivo sigue siendo el de [SPEC.md](SPEC.md): que Wispr Flow se pueda desinstalar sin
 echarlo de menos. Todo lo de aquí se ordena por eso, no por lo interesante que sea.
@@ -93,6 +93,27 @@ conviene tener presentes al tocarlo:
   que son —lo que todavía no se ha verificado— y así deben seguir: un criterio que
   se marca verde para que la lista quede bonita es la forma más rápida de que este
   documento deje de servir para nada.
+
+### WISPI se quedaba zombie tras un micro caído (2026-08-11)
+- [x] El stream de audio muere solo si el micro USB se desconecta (suspensión del
+      equipo, cable, driver) y **nadie volvía a llamar a `AudioCapture.start()`** — el
+      propio docstring del método ya avisaba de que app.py debía hacerlo y no lo hacía.
+      Consecuencia: WISPI seguía "vivo" pero sordo, descartando cada dictado como
+      `corto (0.00s)` sin ningún aviso visible salvo el log
+- [x] Encontrado porque el proceso real llevaba así 22 horas: un `stop()` (desde el
+      botón "salir") se colgó a medio camino —logueó "WISPI parando" y nada más— y el
+      proceso de Windows nunca terminó de morir. Ni excepción ni traza: solo silencio
+- [x] Arreglo 1: `_periodic()` vigila `audio.stream_ok` igual que ya vigilaba
+      `hook.is_alive`, y reintenta `audio.start()` con el mismo backoff exponencial
+      (1, 2, 4… hasta 30 s) que usa `hotkey.py`
+- [x] Arreglo 2: `stop()` arma un hilo daemon (`_arm_hard_exit_watchdog`) que fuerza
+      `os._exit(1)` si el cierre no terminó en 6 s. Si el cierre normal termina antes,
+      el proceso ya no existe cuando el hilo despierta, así que no hace nada — probado
+      en aislado: camino colgado muere en ~1-2 s con exit code 1, camino limpio sale al
+      instante con exit code 0, en ningún caso espera el tope completo
+- [ ] Sin probar con una desconexión real de hardware (USB fuera/dentro con WISPI
+      corriendo) — la reconexión se verificó por lectura de código y porque sigue
+      exactamente el patrón ya probado del watchdog del hook, no con el micro físico
 
 ---
 
